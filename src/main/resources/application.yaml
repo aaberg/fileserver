@@ -1,0 +1,6 @@
+ktor:
+    application:
+        modules:
+            - net.aabergs.ApplicationKt.module
+    deployment:
+        port: 9000
