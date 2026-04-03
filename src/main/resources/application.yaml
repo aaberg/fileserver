@@ -1,6 +1,11 @@
 ktor:
-    application:
-        modules:
-            - net.aabergs.ApplicationKt.module
-    deployment:
-        port: 9000
+  deployment:
+    port: 9001
+  application:
+    modules: [net.aabergs.ApplicationKt.module]
+
+fileserver:
+  publicPort: 9000
+  privatePort: 9001
+  publicBaseUrl: "http://localhost:9000"
+  storageDirectory: "/tmp/fileserver"
