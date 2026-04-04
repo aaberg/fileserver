@@ -1,19 +1,15 @@
 package net.aabergs.services
 
 import java.io.File
+import java.io.IOException
 
 class FileStorage(private val storageDirectory: String) {
     init {
         File(storageDirectory).mkdirs()
     }
     
-    fun storeFile(id: String, content: ByteArray): Boolean {
-        return try {
-            File("$storageDirectory/$id").writeBytes(content)
-            true
-        } catch (e: Exception) {
-            false
-        }
+    fun storeFile(id: String, content: ByteArray) {
+        File("$storageDirectory/$id").writeBytes(content)
     }
     
     fun getFile(id: String): ByteArray? {
@@ -21,7 +17,10 @@ class FileStorage(private val storageDirectory: String) {
         return if (file.exists()) file.readBytes() else null
     }
     
-    fun deleteFile(id: String): Boolean {
-        return File("$storageDirectory/$id").delete()
+    fun deleteFile(id: String) {
+        val file = File("$storageDirectory/$id")
+        if (!file.delete() && file.exists()) {
+            throw IOException("Failed to delete file: ${file.absolutePath}")
+        }
     }
 }

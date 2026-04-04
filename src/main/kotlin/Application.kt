@@ -10,6 +10,7 @@ import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
+import net.aabergs.services.database.DatabaseFactory
 
 fun main(args: Array<String>) {
     // Start both servers
@@ -27,38 +28,32 @@ fun startServers() {
     
     // Initialize shared services
     val storage = FileStorage(storageDirectory)
-    val urlGenerator = UrlGenerator(publicBaseUrl)
+    val databaseService = DatabaseFactory.createDatabaseService()
+    val urlGenerator = UrlGenerator(publicBaseUrl, databaseService)
     
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
-        module(publicPort, storage, urlGenerator)
+        routing {
+            get("/") {
+                call.respondText("Public File Server Running on port $publicPort")
+            }
+            publicRoutes(urlGenerator, storage)
+        }
     }
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        module(privatePort, storage, urlGenerator)
+        routing {
+            get("/") {
+                call.respondText("Private API Running on port $privatePort")
+            }
+            privateRoutes(storage, urlGenerator)
+        }
     }
     
     // Start both servers
     publicServer.start(wait = false)
     privateServer.start(wait = true)
-}
-
-fun Application.module(serverPort: Int, storage: FileStorage, urlGenerator: UrlGenerator) {
-    // Configure routing based on which port we're on
-    routing {
-        get("/") {
-            call.respondText("File Server Running on port $serverPort")
-        }
-        
-        if (serverPort == 9000) {
-            // Public routes only on port 9000
-            publicRoutes(urlGenerator, storage)
-        } else {
-            // Private routes only on port 9001
-            privateRoutes(storage, urlGenerator)
-        }
-    }
 }
 
 

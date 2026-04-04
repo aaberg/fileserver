@@ -1,33 +1,38 @@
 package net.aabergs.services
 
+import net.aabergs.services.database.DatabaseService
 import java.util.*
-import java.util.concurrent.ConcurrentHashMap
 
 data class PublicUrlInfo(val fileId: String, val expiresAt: Long)
 
-class UrlGenerator(private val baseUrl: String) {
-    private val publicUrls = ConcurrentHashMap<String, PublicUrlInfo>()
+class UrlGenerator(private val baseUrl: String, private val databaseService: DatabaseService) {
+    init {
+        databaseService.initialize()
+    }
     
     fun generatePublicUrl(fileId: String, durationMinutes: Long): String {
         val publicId = UUID.randomUUID().toString()
         val expiresAt = System.currentTimeMillis() + durationMinutes * 60 * 1000
-        publicUrls[publicId] = PublicUrlInfo(fileId, expiresAt)
+        databaseService.insertPublicUrl(publicId, fileId, expiresAt)
         return "$baseUrl/$publicId"
     }
     
     fun isPublicUrlValid(publicId: String): Boolean {
-        return publicUrls[publicId]?.let { 
+        return databaseService.getPublicUrlInfo(publicId)?.let { 
             System.currentTimeMillis() < it.expiresAt
         } ?: false
     }
     
     fun getFileIdForPublicId(publicId: String): String? {
-        return publicUrls[publicId]?.fileId
+        return databaseService.getPublicUrlInfo(publicId)?.fileId
     }
     
     // Optional: cleanup expired URLs
     fun cleanupExpired() {
-        val now = System.currentTimeMillis()
-        publicUrls.entries.removeIf { it.value.expiresAt < now }
+        databaseService.cleanupExpired()
+    }
+    
+    fun close() {
+        databaseService.close()
     }
 }

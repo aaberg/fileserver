@@ -9,6 +9,7 @@ import org.junit.*
 import org.junit.Assert.*
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
+import net.aabergs.services.database.DatabaseFactory
 import java.io.File
 import java.nio.file.Files
 
@@ -21,12 +22,21 @@ class PublicRoutesTest {
     @Before
     fun setup() {
         storage = FileStorage(testDir)
-        urlGenerator = UrlGenerator(baseUrl)
+        // Use SQLite for tests with a temporary database
+        System.setProperty("DB_TYPE", "sqlite")
+        System.setProperty("DB_URL", "jdbc:sqlite::memory:")
+        
+        val databaseService = DatabaseFactory.createDatabaseService()
+        urlGenerator = UrlGenerator(baseUrl, databaseService)
     }
     
     @After
     fun cleanup() {
+        urlGenerator.close()
         File(testDir).deleteRecursively()
+        // Clear environment properties
+        System.clearProperty("DB_TYPE")
+        System.clearProperty("DB_URL")
     }
     
     @Test

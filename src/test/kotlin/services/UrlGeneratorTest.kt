@@ -1,5 +1,6 @@
 package net.aabergs.services
 
+import net.aabergs.services.database.DatabaseFactory
 import org.junit.*
 import org.junit.Assert.*
 import java.util.regex.Pattern
@@ -10,7 +11,20 @@ class UrlGeneratorTest {
     
     @Before
     fun setup() {
-        urlGenerator = UrlGenerator(baseUrl)
+        // Use SQLite for tests with a temporary database
+        System.setProperty("DB_TYPE", "sqlite")
+        System.setProperty("DB_URL", "jdbc:sqlite::memory:")
+        
+        val databaseService = DatabaseFactory.createDatabaseService()
+        urlGenerator = UrlGenerator(baseUrl, databaseService)
+    }
+    
+    @After
+    fun teardown() {
+        urlGenerator.close()
+        // Clear environment properties
+        System.clearProperty("DB_TYPE")
+        System.clearProperty("DB_URL")
     }
     
     @Test

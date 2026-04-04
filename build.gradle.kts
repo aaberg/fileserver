@@ -21,6 +21,9 @@ dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.config.yaml)
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.4.2")
+    implementation(libs.hikari.cp)
+    implementation(libs.sqlite.jdbc)
+    implementation(libs.postgresql)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
 }
