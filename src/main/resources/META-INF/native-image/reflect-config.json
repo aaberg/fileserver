@@ -1,0 +1,44 @@
+[
+  {
+    "name": "net.aabergs.ApplicationKt",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.ktor.server.application.Application",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.ktor.server.routing.Routing",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.sqlite.util.ProcessRunner",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "org.sqlite.util.OSInfo",
+    "allDeclaredConstructors": true,
+    "allPublicMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "kotlin.reflect.jvm.internal.impl.builtins.KotlinBuiltIns",
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "kotlin.reflect.jvm.internal.KClassImpl",
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "kotlin.jvm.internal.Reflection",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "kotlin.reflect.KClass",
+    "allDeclaredMethods": true
+  }
+]

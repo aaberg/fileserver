@@ -33,27 +33,35 @@ fun startServers() {
     
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
-        routing {
-            get("/") {
-                call.respondText("Public File Server Running on port $publicPort")
-            }
-            publicRoutes(urlGenerator, storage)
-        }
+        configurePublicServer(urlGenerator, storage)
     }
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        routing {
-            get("/") {
-                call.respondText("Private API Running on port $privatePort")
-            }
-            privateRoutes(storage, urlGenerator)
-        }
+        configurePrivateServer(urlGenerator, storage)
     }
     
     // Start both servers
     publicServer.start(wait = false)
     privateServer.start(wait = true)
+}
+
+fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileStorage) {
+    routing {
+        get("/") {
+            call.respondText("Public File Server Running")
+        }
+        publicRoutes(urlGenerator, storage)
+    }
+}
+
+fun Application.configurePrivateServer(urlGenerator: UrlGenerator, storage: FileStorage) {
+    routing {
+        get("/") {
+            call.respondText("Private API Server Running")
+        }
+        privateRoutes(storage, urlGenerator)
+    }
 }
 
 

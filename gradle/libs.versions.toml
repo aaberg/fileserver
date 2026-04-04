@@ -1,10 +1,10 @@
 [versions]
 kotlin = "2.3.0"
 ktor = "3.4.2"
-logback = "1.4.14"
-hikari = "5.1.0"
-sqlite-jdbc = "3.45.1.0"
-postgresql = "42.7.3"
+logback = "1.5.32"
+hikari = "7.0.2"
+sqlite-jdbc = "3.51.3.0"
+postgresql = "42.7.10"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor" }

@@ -1,0 +1,40 @@
+# Dockerfile for GraalVM native compilation of FileServer
+
+# Build stage - Use official GraalVM Community Edition with Java 25
+FROM ghcr.io/graalvm/graalvm-community:25.0.2 AS build
+
+# Native-image is already included in GraalVM Community Edition
+
+# Copy source code
+WORKDIR /app
+COPY . .
+
+# Build with Gradle (skip tests for Docker build)
+RUN ./gradlew nativeCompile
+RUN ls
+WORKDIR /app/build
+RUN ls
+
+# Runtime stage - Use Debian slim for glibc compatibility
+FROM debian:bookworm-slim
+
+# Install required runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libc6
+
+# Copy native binary
+WORKDIR /app
+COPY --from=build nativeimage nativeimage
+
+# Copy configuration
+COPY src/main/resources/application.yaml .
+
+# Expose ports
+EXPOSE 9000 9001
+
+# Set environment variables for SQLite (default)
+ENV DB_TYPE=sqlite
+ENV DB_URL=jdbc:sqlite:fileserver.db
+
+# Run the application
+CMD ["./nativeimage"]
