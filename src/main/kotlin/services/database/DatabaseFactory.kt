@@ -2,11 +2,15 @@ package net.aabergs.services.database
 
 class DatabaseFactory {
     companion object {
+        private fun configValue(key: String): String? {
+            return System.getProperty(key) ?: System.getenv(key)
+        }
+
         fun createDatabaseService(): DatabaseService {
-            val dbType = System.getenv("DB_TYPE") ?: "sqlite"
-            val dbUrl = System.getenv("DB_URL") ?: getDefaultDbUrl(dbType)
-            val dbUser = System.getenv("DB_USER")
-            val dbPassword = System.getenv("DB_PASSWORD")
+            val dbType = configValue("DB_TYPE") ?: "sqlite"
+            val dbUrl = configValue("DB_URL") ?: getDefaultDbUrl(dbType)
+            val dbUser = configValue("DB_USER")
+            val dbPassword = configValue("DB_PASSWORD")
 
             val config = when (dbType.lowercase()) {
                 "postgres", "postgresql" -> {
