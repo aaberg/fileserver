@@ -37,7 +37,7 @@ fun startServers() {
     val storage = FileStorage(storageDirectory)
     val databaseService = DatabaseFactory.createDatabaseService()
     val urlGenerator = UrlGenerator(publicBaseUrl, databaseService)
-    
+
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
         configurePublicServer(urlGenerator, storage)
@@ -47,6 +47,15 @@ fun startServers() {
     val privateServer = embeddedServer(CIO, port = privatePort) {
         configurePrivateServer(urlGenerator, storage, privateApiToken, maxUploadBytes)
     }
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        try {
+            privateServer.stop(gracePeriodMillis = 5_000, timeoutMillis = 15_000)
+            publicServer.stop(gracePeriodMillis = 5_000, timeoutMillis = 15_000)
+        } finally {
+            urlGenerator.close()
+        }
+    })
     
     // Start both servers
     publicServer.start(wait = false)
