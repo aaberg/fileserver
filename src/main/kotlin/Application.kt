@@ -3,17 +3,60 @@ package net.aabergs
 import io.ktor.server.application.*
 import io.ktor.server.config.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.routing.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.plugins.*
 import io.ktor.server.response.*
 import io.ktor.serialization.kotlinx.json.*
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
+import net.aabergs.routes.UnauthorizedAccessException
+import net.aabergs.models.ErrorResponse
 import net.aabergs.services.FileStorage
+import net.aabergs.services.PayloadTooLargeException
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
+
+private data class ServerTimeouts(
+    val shutdownGracePeriodMillis: Long,
+    val shutdownTimeoutMillis: Long
+)
+
+fun Application.configureCommonPlugins() {
+    install(ContentNegotiation) {
+        json()
+    }
+
+    install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            call.respond(
+                io.ktor.http.HttpStatusCode.BadRequest,
+                ErrorResponse("bad_request", cause.message ?: "Bad request")
+            )
+        }
+        exception<UnauthorizedAccessException> { call, _ ->
+            call.respond(
+                io.ktor.http.HttpStatusCode.Unauthorized,
+                ErrorResponse("unauthorized", "Unauthorized")
+            )
+        }
+        exception<PayloadTooLargeException> { call, cause ->
+            call.respond(
+                io.ktor.http.HttpStatusCode.PayloadTooLarge,
+                ErrorResponse("payload_too_large", cause.message ?: "Payload too large")
+            )
+        }
+        exception<Throwable> { call, _ ->
+            call.respond(
+                io.ktor.http.HttpStatusCode.InternalServerError,
+                ErrorResponse("internal_error", "Internal server error")
+            )
+        }
+    }
+}
 
 fun main(args: Array<String>) {
     // Start both servers
@@ -30,6 +73,13 @@ fun startServers() {
     val storageDirectory = fileserverConfig.property("storageDirectory").getString()
     val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
         ?: DEFAULT_MAX_UPLOAD_BYTES
+    val timeoutsConfig = fileserverConfig.config("timeouts")
+    val serverTimeouts = ServerTimeouts(
+        shutdownGracePeriodMillis = timeoutsConfig.propertyOrNull("shutdownGracePeriodMillis")
+            ?.getString()?.toLong() ?: 5_000,
+        shutdownTimeoutMillis = timeoutsConfig.propertyOrNull("shutdownTimeoutMillis")
+            ?.getString()?.toLong() ?: 15_000
+    )
     val privateApiToken = System.getenv("PRIVATE_API_TOKEN")?.takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("PRIVATE_API_TOKEN must be set")
     
@@ -50,8 +100,14 @@ fun startServers() {
 
     Runtime.getRuntime().addShutdownHook(Thread {
         try {
-            privateServer.stop(gracePeriodMillis = 5_000, timeoutMillis = 15_000)
-            publicServer.stop(gracePeriodMillis = 5_000, timeoutMillis = 15_000)
+            privateServer.stop(
+                serverTimeouts.shutdownGracePeriodMillis,
+                serverTimeouts.shutdownTimeoutMillis
+            )
+            publicServer.stop(
+                serverTimeouts.shutdownGracePeriodMillis,
+                serverTimeouts.shutdownTimeoutMillis
+            )
         } finally {
             urlGenerator.close()
         }
@@ -63,9 +119,7 @@ fun startServers() {
 }
 
 fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileStorage) {
-    install(ContentNegotiation) {
-        json()
-    }
+    configureCommonPlugins()
 
     routing {
         get("/") {
@@ -81,9 +135,7 @@ fun Application.configurePrivateServer(
     privateApiToken: String,
     maxUploadBytes: Long
 ) {
-    install(ContentNegotiation) {
-        json()
-    }
+    configureCommonPlugins()
 
     routing {
         get("/") {

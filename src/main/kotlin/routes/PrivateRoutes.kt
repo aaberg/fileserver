@@ -15,6 +15,7 @@ import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
+class UnauthorizedAccessException : RuntimeException("Unauthorized")
 
 private fun ApplicationCall.requireValidFileId(): String {
     val id = parameters["id"] ?: throw BadRequestException("Missing id")
@@ -31,19 +32,16 @@ private fun constantTimeEquals(left: String, right: String): Boolean {
 
 private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: String): Boolean {
     val authorizationHeader = request.headers[HttpHeaders.Authorization] ?: run {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        throw UnauthorizedAccessException()
     }
 
     if (!authorizationHeader.startsWith("Bearer ")) {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        throw UnauthorizedAccessException()
     }
 
     val providedToken = authorizationHeader.removePrefix("Bearer ").trim()
     if (providedToken.isEmpty() || !constantTimeEquals(providedToken, privateApiToken)) {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        throw UnauthorizedAccessException()
     }
 
     return true
@@ -57,22 +55,19 @@ fun Route.privateRoutes(
 ) {
     route("/file") {
         put("/{id}") {
-            if (!call.requirePrivateApiAuth(privateApiToken)) {
-                return@put
+            call.requirePrivateApiAuth(privateApiToken)
+            call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()?.let { contentLength ->
+                if (contentLength > maxUploadBytes) {
+                    throw PayloadTooLargeException("Upload exceeds max size of $maxUploadBytes bytes")
+                }
             }
             val id = call.requireValidFileId()
-            try {
-                storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
-                call.respond(HttpStatusCode.OK)
-            } catch (_: PayloadTooLargeException) {
-                call.respond(HttpStatusCode.PayloadTooLarge, "Upload too large")
-            }
+            storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
+            call.respond(HttpStatusCode.OK)
         }
         
         get("/{id}") {
-            if (!call.requirePrivateApiAuth(privateApiToken)) {
-                return@get
-            }
+            call.requirePrivateApiAuth(privateApiToken)
             val id = call.requireValidFileId()
             val filePath = storage.getFilePath(id)
             if (filePath != null) {
@@ -91,18 +86,14 @@ fun Route.privateRoutes(
         }
         
         delete("/{id}") {
-            if (!call.requirePrivateApiAuth(privateApiToken)) {
-                return@delete
-            }
+            call.requirePrivateApiAuth(privateApiToken)
             val id = call.requireValidFileId()
             storage.deleteFile(id)
             call.respond(HttpStatusCode.OK)
         }
         
         post("/{id}/public-url") {
-            if (!call.requirePrivateApiAuth(privateApiToken)) {
-                return@post
-            }
+            call.requirePrivateApiAuth(privateApiToken)
             val id = call.requireValidFileId()
             val request = call.receive<PublicUrlRequest>()
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)

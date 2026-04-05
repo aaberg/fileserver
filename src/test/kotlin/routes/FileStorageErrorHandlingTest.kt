@@ -3,10 +3,12 @@ package net.aabergs.routes
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.application.*
 import io.ktor.server.testing.*
 import io.ktor.server.routing.*
 import org.junit.*
 import org.junit.Assert.*
+import net.aabergs.configureCommonPlugins
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 import java.io.File
@@ -18,6 +20,13 @@ class FileStorageErrorHandlingTest {
     private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
     private val baseUrl = "http://localhost:9000"
+
+    private fun Application.configurePrivateRoutesForTest() {
+        configureCommonPlugins()
+        routing {
+            privateRoutes(storage, urlGenerator, privateApiToken)
+        }
+    }
     
     @Before
     fun setup() {
@@ -43,9 +52,7 @@ class FileStorageErrorHandlingTest {
     fun testFileStorageErrorReturns500() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Make the storage directory read-only to trigger an error
@@ -73,9 +80,7 @@ class FileStorageErrorHandlingTest {
     fun testFileStorageSuccessReturns200() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Upload a file - should succeed with 200
