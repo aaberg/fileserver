@@ -58,6 +58,21 @@ curl -X PUT \
   http://localhost:9001/file/example.txt
 ```
 
+## Health Endpoints
+
+Both servers expose an open health check endpoint:
+
+- Public server: `GET http://localhost:9000/health`
+- Private server: `GET http://localhost:9001/health`
+
+Each endpoint returns:
+
+```json
+{"status":"ok"}
+```
+
+The root endpoint (`GET /`) is not used for health checks.
+
 ## Runtime Configuration
 
 - `PRIVATE_API_TOKEN` (required): bearer token used for all `/file/*` private API calls.
