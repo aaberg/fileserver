@@ -52,7 +52,10 @@ class FileserverClient(
             .build()
 
         client.newCall(request).execute().use { response ->
-            ensureSuccess(response.code, response.body?.string())
+            ensureSuccess(
+                response.code,
+                if (response.isSuccessful) null else response.body?.string()
+            )
         }
     }
 
