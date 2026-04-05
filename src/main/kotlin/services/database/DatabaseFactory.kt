@@ -9,8 +9,8 @@ class DatabaseFactory {
         fun createDatabaseService(): DatabaseService {
             val dbType = configValue("DB_TYPE") ?: "sqlite"
             val dbUrl = configValue("DB_URL") ?: getDefaultDbUrl(dbType)
-            val dbUser = configValue("DB_USER")
-            val dbPassword = configValue("DB_PASSWORD")
+            val dbUser = configValue("DB_USER")?.takeUnless { it.isBlank() }
+            val dbPassword = configValue("DB_PASSWORD")?.takeUnless { it.isBlank() }
 
             val config = when (dbType.lowercase()) {
                 "postgres", "postgresql" -> {
