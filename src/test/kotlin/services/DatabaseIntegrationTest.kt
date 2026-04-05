@@ -8,15 +8,16 @@ import java.nio.file.Path
 
 class DatabaseIntegrationTest {
     private lateinit var urlGenerator: UrlGenerator
-    private lateinit var testDbPath: Path
+    private var testDbPath: Path? = null
     private val baseUrl = "http://localhost:9000"
     
     @Before
     fun setup() {
         // Use SQLite with an isolated temporary database file
-        testDbPath = Files.createTempFile("fileserver-integration-", ".db")
+        val path = Files.createTempFile("fileserver-integration-", ".db")
+        testDbPath = path
         System.setProperty("DB_TYPE", "sqlite")
-        System.setProperty("DB_URL", "jdbc:sqlite:${testDbPath.toAbsolutePath()}")
+        System.setProperty("DB_URL", "jdbc:sqlite:${path.toAbsolutePath()}")
         
         val databaseService = DatabaseFactory.createDatabaseService()
         urlGenerator = UrlGenerator(baseUrl, databaseService)
@@ -28,7 +29,7 @@ class DatabaseIntegrationTest {
         // Clear environment properties
         System.clearProperty("DB_TYPE")
         System.clearProperty("DB_URL")
-        Files.deleteIfExists(testDbPath)
+        testDbPath?.let { Files.deleteIfExists(it) }
     }
     
     @Test
