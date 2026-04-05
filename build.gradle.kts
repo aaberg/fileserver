@@ -36,6 +36,7 @@ graalvmNative {
     binaries {
         named("main") {
             buildArgs.add("--initialize-at-build-time=org.sqlite.util.ProcessRunner")
+            buildArgs.add("-H:IncludeResources=logback\\.xml")
         }
     }
 }

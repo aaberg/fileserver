@@ -7,7 +7,3 @@ fileserver:
   timeouts:
     shutdownGracePeriodMillis: 5000
     shutdownTimeoutMillis: 15000
-
-logger:
-  levels:
-    root: INFO  # Set root log level
