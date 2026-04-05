@@ -43,7 +43,15 @@ fun Route.privateRoutes(
             val id = call.requireValidFileId()
             val filePath = storage.getFilePath(id)
             if (filePath != null) {
-                call.respondFile(filePath.toFile())
+                val file = filePath.toFile()
+                call.response.header(
+                    HttpHeaders.ContentDisposition,
+                    ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString()
+                )
+                call.response.header("X-Content-Type-Options", "nosniff")
+                call.respondOutputStream(ContentType.Application.OctetStream) {
+                    file.inputStream().use { input -> input.copyTo(this) }
+                }
             } else {
                 call.respond(HttpStatusCode.NotFound, "File not found")
             }
