@@ -36,5 +36,4 @@ out/
 .vscode/
 
 ### Application specifics ###
-fileserver.db
 /*.db
