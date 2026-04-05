@@ -3,7 +3,6 @@
     {
       "type": "com.zaxxer.hikari.HikariConfig",
       "allDeclaredMethods": true
-      
     }
   ],
   "resources": []
