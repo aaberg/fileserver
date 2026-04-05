@@ -10,6 +10,7 @@ import io.ktor.server.response.*
 import io.ktor.serialization.kotlinx.json.*
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
+import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
@@ -27,6 +28,8 @@ fun startServers() {
     val privatePort = fileserverConfig.property("privatePort").getString().toInt()
     val publicBaseUrl = fileserverConfig.property("publicBaseUrl").getString()
     val storageDirectory = fileserverConfig.property("storageDirectory").getString()
+    val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
+        ?: DEFAULT_MAX_UPLOAD_BYTES
     
     // Initialize shared services
     val storage = FileStorage(storageDirectory)
@@ -40,7 +43,7 @@ fun startServers() {
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        configurePrivateServer(urlGenerator, storage)
+        configurePrivateServer(urlGenerator, storage, maxUploadBytes)
     }
     
     // Start both servers
@@ -61,7 +64,11 @@ fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileS
     }
 }
 
-fun Application.configurePrivateServer(urlGenerator: UrlGenerator, storage: FileStorage) {
+fun Application.configurePrivateServer(
+    urlGenerator: UrlGenerator,
+    storage: FileStorage,
+    maxUploadBytes: Long
+) {
     install(ContentNegotiation) {
         json()
     }
@@ -70,7 +77,6 @@ fun Application.configurePrivateServer(urlGenerator: UrlGenerator, storage: File
         get("/") {
             call.respondText("Private API Server Running")
         }
-        privateRoutes(storage, urlGenerator)
+        privateRoutes(storage, urlGenerator, maxUploadBytes)
     }
 }
-

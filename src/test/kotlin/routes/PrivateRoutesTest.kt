@@ -204,4 +204,20 @@ class PrivateRoutesTest {
         assertEquals(HttpStatusCode.OK, getResponse.status)
         assertEquals("Hello with extension", getResponse.bodyAsText())
     }
+
+    @Test
+    fun testUploadTooLargeReturns413() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator, maxUploadBytes = 5)
+            }
+        }
+
+        val response = client.put("/file/too-large.txt") {
+            setBody("123456".toByteArray())
+        }
+
+        assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+        assertNull(storage.getFile("too-large.txt"))
+    }
 }
