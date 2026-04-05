@@ -2,10 +2,12 @@ package net.aabergs
 
 import io.ktor.server.application.*
 import io.ktor.server.config.*
+import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.routing.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.ktor.server.response.*
+import io.ktor.serialization.kotlinx.json.*
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.services.FileStorage
@@ -47,6 +49,10 @@ fun startServers() {
 }
 
 fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileStorage) {
+    install(ContentNegotiation) {
+        json()
+    }
+
     routing {
         get("/") {
             call.respondText("Public File Server Running")
@@ -56,6 +62,10 @@ fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileS
 }
 
 fun Application.configurePrivateServer(urlGenerator: UrlGenerator, storage: FileStorage) {
+    install(ContentNegotiation) {
+        json()
+    }
+
     routing {
         get("/") {
             call.respondText("Private API Server Running")
@@ -63,5 +73,4 @@ fun Application.configurePrivateServer(urlGenerator: UrlGenerator, storage: File
         privateRoutes(storage, urlGenerator)
     }
 }
-
 

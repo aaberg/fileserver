@@ -149,4 +149,19 @@ class PrivateRoutesTest {
         assertTrue(urlGenerator.isPublicUrlValid(publicId))
         assertEquals(fileId, urlGenerator.getFileIdForPublicId(publicId))
     }
+
+    @Test
+    fun testRejectsPathTraversalFileId() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator)
+            }
+        }
+
+        val response = client.put("/file/%2E%2E%2Fetc%2Fpasswd") {
+            setBody("bad".toByteArray())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
 }

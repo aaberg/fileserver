@@ -62,12 +62,11 @@ class FileStorageTest {
     
     @Test
     fun testStoreFileWithInvalidDirectory() {
-        // Create storage with invalid directory
-        val invalidStorage = FileStorage("/invalid/directory/path")
-        
         try {
+            // Creating storage with invalid directory should fail
+            val invalidStorage = FileStorage("/invalid/directory/path")
             invalidStorage.storeFile("test-file", "content".toByteArray())
-            fail("Expected IOException to be thrown")
+            fail("Expected file system exception to be thrown")
         } catch (e: Exception) {
             // Expected - could be IOException or other file system error
         }

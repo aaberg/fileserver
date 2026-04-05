@@ -12,17 +12,27 @@ import net.aabergs.models.PublicUrlResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 
+private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
+
+private fun ApplicationCall.requireValidFileId(): String {
+    val id = parameters["id"] ?: throw BadRequestException("Missing id")
+    if (!FILE_ID_PATTERN.matches(id)) {
+        throw BadRequestException("Invalid id format")
+    }
+    return id
+}
+
 fun Route.privateRoutes(storage: FileStorage, urlGenerator: UrlGenerator) {
     route("/file") {
         put("/{id}") {
-            val id = call.parameters["id"] ?: throw BadRequestException("Missing id")
+            val id = call.requireValidFileId()
             val content = call.receive<ByteArray>()
             storage.storeFile(id, content)
             call.respond(HttpStatusCode.OK)
         }
         
         get("/{id}") {
-            val id = call.parameters["id"] ?: throw BadRequestException("Missing id")
+            val id = call.requireValidFileId()
             val content = storage.getFile(id)
             if (content != null) {
                 call.respondBytes(content, ContentType.Application.OctetStream)
@@ -32,13 +42,13 @@ fun Route.privateRoutes(storage: FileStorage, urlGenerator: UrlGenerator) {
         }
         
         delete("/{id}") {
-            val id = call.parameters["id"] ?: throw BadRequestException("Missing id")
+            val id = call.requireValidFileId()
             storage.deleteFile(id)
             call.respond(HttpStatusCode.OK)
         }
         
         post("/{id}/public-url") {
-            val id = call.parameters["id"] ?: throw BadRequestException("Missing id")
+            val id = call.requireValidFileId()
             val request = call.receive<PublicUrlRequest>()
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)
             call.respond(PublicUrlResponse(publicUrl))
