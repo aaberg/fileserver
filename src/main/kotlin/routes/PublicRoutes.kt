@@ -1,9 +1,7 @@
 package net.aabergs.routes
 
 import io.ktor.http.*
-import io.ktor.http.content.*
 import io.ktor.server.application.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.plugins.*
@@ -23,10 +21,10 @@ fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage) {
             call.respond(HttpStatusCode.NotFound, "File not found")
             return@get
         }
-        val fileContent = storage.getFile(fileId)
+        val filePath = storage.getFilePath(fileId)
         
-        if (fileContent != null) {
-            call.respondBytes(fileContent, ContentType.Application.OctetStream)
+        if (filePath != null) {
+            call.respondFile(filePath.toFile())
         } else {
             call.respond(HttpStatusCode.NotFound, "File not found")
         }

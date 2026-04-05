@@ -1,9 +1,11 @@
 package net.aabergs.services
 
 import java.io.File
+import java.io.InputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 
 class FileStorage(private val storageDirectory: String) {
@@ -38,11 +40,57 @@ class FileStorage(private val storageDirectory: String) {
             StandardOpenOption.WRITE
         )
     }
+
+    fun storeFileFromStream(id: String, input: InputStream, maxUploadBytes: Long) {
+        val filePath = resolveSafePath(id)
+        val tempPath = Files.createTempFile(storagePath, "upload-", ".tmp")
+
+        try {
+            input.use { stream ->
+                Files.newOutputStream(
+                    tempPath,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+                ).use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var totalBytes = 0L
+
+                    while (true) {
+                        val bytesRead = stream.read(buffer)
+                        if (bytesRead == -1) {
+                            break
+                        }
+
+                        totalBytes += bytesRead
+                        if (totalBytes > maxUploadBytes) {
+                            throw PayloadTooLargeException("Upload exceeds max size of $maxUploadBytes bytes")
+                        }
+
+                        output.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+
+            Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: Exception) {
+            Files.deleteIfExists(tempPath)
+            throw e
+        }
+    }
     
     fun getFile(id: String): ByteArray? {
         val filePath = resolveSafePath(id)
         return if (Files.exists(filePath) && Files.isRegularFile(filePath)) {
             Files.readAllBytes(filePath)
+        } else {
+            null
+        }
+    }
+
+    fun getFilePath(id: String): Path? {
+        val filePath = resolveSafePath(id)
+        return if (Files.exists(filePath) && Files.isRegularFile(filePath)) {
+            filePath
         } else {
             null
         }
@@ -55,3 +103,5 @@ class FileStorage(private val storageDirectory: String) {
         }
     }
 }
+
+class PayloadTooLargeException(message: String) : RuntimeException(message)

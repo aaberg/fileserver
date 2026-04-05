@@ -3,6 +3,7 @@ fileserver:
   privatePort: 9001
   publicBaseUrl: "http://localhost:9000"
   storageDirectory: "/tmp/fileserver"
+  maxUploadBytes: 10485760
 
 logger:
   levels:
