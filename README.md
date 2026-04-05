@@ -39,10 +39,11 @@ If the server starts successfully, you'll see the following output:
 
 ## Private API Authentication
 
-Private endpoints under `/file/*` require a bearer token.
+Private endpoints under `/file/*` are served by the private server on port `9001` and require a bearer token.
+Public routes on port `9000` do not use this `Authorization` header requirement.
 
 - Set `PRIVATE_API_TOKEN` before starting the server.
-- Send `Authorization: Bearer <token>` on private API requests.
+- Send `Authorization: Bearer <token>` only on requests to the private server (`http://localhost:9001/file/*`).
 
 Example:
 
