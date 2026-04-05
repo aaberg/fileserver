@@ -10,8 +10,8 @@ WORKDIR /app
 COPY . .
 
 # Build with Gradle (skip tests for Docker build)
-RUN ./gradlew nativeCompile
-RUN test -x /app/build/native/nativeCompile/fileserver
+RUN ./gradlew :server:nativeCompile
+RUN test -x /app/server/build/native/nativeCompile/fileserver
 
 # Runtime stage - Use Debian slim for glibc compatibility
 FROM debian:bookworm-slim
@@ -28,10 +28,10 @@ RUN useradd --system --create-home --shell /usr/sbin/nologin appuser
 
 # Copy native binary
 WORKDIR /app
-COPY --from=build /app/build/native/nativeCompile/fileserver ./fileserver
+COPY --from=build /app/server/build/native/nativeCompile/fileserver ./fileserver
 
 # Copy configuration
-COPY src/main/resources/application.yaml .
+COPY server/src/main/resources/application.yaml .
 
 # Ensure runtime user can read/write app data
 RUN chown -R appuser:appuser /app
@@ -48,7 +48,7 @@ USER appuser
 
 # Container health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
-  CMD curl -fsS http://localhost:9000/ || exit 1
+  CMD curl -fsS http://localhost:9000/health || exit 1
 
 # Run the application
 CMD ["./fileserver"]

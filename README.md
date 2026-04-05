@@ -24,11 +24,10 @@ To build or run the project, use one of the following tasks:
 | -----------------------------------------|---------------------------------------------------------------------- |
 | `./gradlew test`                        | Run the tests                                                        |
 | `./gradlew build`                       | Build everything                                                     |
-| `./gradlew buildFatJar`                 | Build an executable JAR of the server with all dependencies included |
-| `./gradlew buildImage`                  | Build the docker image to use with the fat JAR                       |
-| `./gradlew publishImageToLocalRegistry` | Publish the docker image locally                                     |
-| `./gradlew run`                         | Run the server                                                       |
-| `./gradlew runDocker`                   | Run using the local docker image                                     |
+| `./gradlew :server:test`                | Run only server tests                                                |
+| `./gradlew :private-api-client:test`    | Run only client-library tests                                        |
+| `./gradlew :server:nativeCompile`       | Build GraalVM native server binary                                   |
+| `./gradlew :server:run`                 | Run the server module                                                |
 
 If the server starts successfully, you'll see the following output:
 
@@ -48,7 +47,7 @@ Public routes on port `9000` do not use this `Authorization` header requirement.
 Example:
 
 ```bash
-PRIVATE_API_TOKEN=my-secret-token ./gradlew run
+PRIVATE_API_TOKEN=my-secret-token ./gradlew :server:run
 ```
 
 ```bash
@@ -95,7 +94,7 @@ Quick start:
 1. Start the server locally:
 
 ```bash
-PRIVATE_API_TOKEN=dev-token ./gradlew run
+PRIVATE_API_TOKEN=dev-token ./gradlew :server:run
 ```
 
 2. In IntelliJ, open `manual-tests/fileserver.http`.

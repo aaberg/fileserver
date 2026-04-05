@@ -3,7 +3,7 @@
 PRIVATE_API_TOKEN=${PRIVATE_API_TOKEN:-dev-token}
 
 # Start the server in the background
-PRIVATE_API_TOKEN="$PRIVATE_API_TOKEN" ./gradlew run --no-daemon &
+PRIVATE_API_TOKEN="$PRIVATE_API_TOKEN" ./gradlew :server:run --no-daemon &
 SERVER_PID=$!
 
 # Wait a bit for the server to start
