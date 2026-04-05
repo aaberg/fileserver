@@ -1,0 +1,52 @@
+@publicHost = http://localhost:9000
+@privateHost = http://localhost:9001
+@token = dev-token
+@fileId = manual-test.txt
+
+### Public health (open)
+GET {{publicHost}}/health
+
+### Private health (open)
+GET {{privateHost}}/health
+
+### Upload file (private auth required)
+PUT {{privateHost}}/file/{{fileId}}
+Authorization: Bearer {{token}}
+Content-Type: application/octet-stream
+
+Hello from IntelliJ HTTP client.
+
+### Download file (private auth required)
+GET {{privateHost}}/file/{{fileId}}
+Authorization: Bearer {{token}}
+
+### Generate public URL (private auth required)
+POST {{privateHost}}/file/{{fileId}}/public-url
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "duration": 10
+}
+
+> {%
+  client.global.set("publicUrl", response.body.publicUrl);
+  client.global.set("publicId", response.body.publicUrl.split('/').pop());
+%}
+
+### Download via generated public URL
+GET {{publicHost}}/{{publicId}}
+
+### Negative test: missing auth should return 401
+GET {{privateHost}}/file/{{fileId}}
+
+### Negative test: invalid file id should return 400
+PUT {{privateHost}}/file/..
+Authorization: Bearer {{token}}
+Content-Type: application/octet-stream
+
+bad
+
+### Cleanup: delete test file
+DELETE {{privateHost}}/file/{{fileId}}
+Authorization: Bearer {{token}}
