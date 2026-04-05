@@ -11,9 +11,7 @@ COPY . .
 
 # Build with Gradle (skip tests for Docker build)
 RUN ./gradlew nativeCompile
-RUN ls
-WORKDIR /app/build
-RUN ls
+RUN test -x /app/build/native/nativeCompile/fileserver
 
 # Runtime stage - Use Debian slim for glibc compatibility
 FROM debian:bookworm-slim
@@ -24,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy native binary
 WORKDIR /app
-COPY --from=build nativeimage nativeimage
+COPY --from=build /app/build/native/nativeCompile/fileserver ./fileserver
 
 # Copy configuration
 COPY src/main/resources/application.yaml .
@@ -37,4 +35,4 @@ ENV DB_TYPE=sqlite
 ENV DB_URL=jdbc:sqlite:fileserver.db
 
 # Run the application
-CMD ["./nativeimage"]
+CMD ["./fileserver"]
