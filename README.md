@@ -82,3 +82,26 @@ The root endpoint (`GET /`) is not used for health checks.
 - `fileserver.maxUploadBytes`: max upload size in bytes (default `10485760`).
 - `fileserver.timeouts.shutdownGracePeriodMillis`: graceful stop window in ms (default `5000`).
 - `fileserver.timeouts.shutdownTimeoutMillis`: hard stop timeout in ms (default `15000`).
+
+## Manual Verification (IntelliJ HTTP Client)
+
+This repository includes a ready-to-use IntelliJ HTTP client file:
+
+- Requests file: `manual-tests/fileserver.http`
+- Environment file: `manual-tests/http-client.env.json`
+
+Quick start:
+
+1. Start the server locally:
+
+```bash
+PRIVATE_API_TOKEN=dev-token ./gradlew run
+```
+
+2. In IntelliJ, open `manual-tests/fileserver.http`.
+3. Select the `local` environment from `manual-tests/http-client.env.json`.
+4. Run requests top-to-bottom to verify:
+   - public/private health endpoints
+   - authenticated file upload/download
+   - public URL creation and access
+   - expected 401 and 400 negative cases
