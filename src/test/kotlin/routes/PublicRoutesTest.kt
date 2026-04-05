@@ -7,6 +7,7 @@ import io.ktor.server.testing.*
 import io.ktor.server.routing.*
 import org.junit.*
 import org.junit.Assert.*
+import net.aabergs.configurePublicServer
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
@@ -101,5 +102,17 @@ class PublicRoutesTest {
         val response = client.get("/invalid-id")
         
         assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun testPublicHealthEndpoint() = testApplication {
+        application {
+            configurePublicServer(urlGenerator, storage)
+        }
+
+        val response = client.get("/health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("{\"status\":\"ok\"}", response.bodyAsText())
     }
 }
