@@ -15,6 +15,7 @@ import java.nio.file.Files
 class FileStorageErrorHandlingTest {
     private lateinit var storage: FileStorage
     private lateinit var urlGenerator: UrlGenerator
+    private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
     private val baseUrl = "http://localhost:9000"
     
@@ -43,7 +44,7 @@ class FileStorageErrorHandlingTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
@@ -55,6 +56,7 @@ class FileStorageErrorHandlingTest {
         try {
             // Try to upload a file - should fail with 500
             val response = client.put("/file/test-error") {
+                header(HttpHeaders.Authorization, "Bearer $privateApiToken")
                 setBody("test content".toByteArray())
             }
             
@@ -72,12 +74,13 @@ class FileStorageErrorHandlingTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
         // Upload a file - should succeed with 200
         val response = client.put("/file/test-success") {
+            header(HttpHeaders.Authorization, "Bearer $privateApiToken")
             setBody("test content".toByteArray())
         }
         

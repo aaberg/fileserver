@@ -16,8 +16,13 @@ import java.nio.file.Files
 class PrivateRoutesTest {
     private lateinit var storage: FileStorage
     private lateinit var urlGenerator: UrlGenerator
+    private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
     private val baseUrl = "http://localhost:9000"
+
+    private fun HttpRequestBuilder.withAuth() {
+        header(HttpHeaders.Authorization, "Bearer $privateApiToken")
+    }
     
     @Before
     fun setup() {
@@ -44,7 +49,7 @@ class PrivateRoutesTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
@@ -53,6 +58,7 @@ class PrivateRoutesTest {
         val fileContent = "Hello, World!".toByteArray()
         
         val response = client.put("/file/$fileId") {
+            withAuth()
             setBody(fileContent)
         }
         
@@ -69,7 +75,7 @@ class PrivateRoutesTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
@@ -79,7 +85,9 @@ class PrivateRoutesTest {
         storage.storeFile(fileId, fileContent)
         
         // Test getting the file
-        val response = client.get("/file/$fileId")
+        val response = client.get("/file/$fileId") {
+            withAuth()
+        }
         
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Hello, World!", response.bodyAsText())
@@ -90,12 +98,14 @@ class PrivateRoutesTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
         // Test getting a non-existent file
-        val response = client.get("/file/non-existent")
+        val response = client.get("/file/non-existent") {
+            withAuth()
+        }
         
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -105,7 +115,7 @@ class PrivateRoutesTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
@@ -115,7 +125,9 @@ class PrivateRoutesTest {
         storage.storeFile(fileId, fileContent)
         
         // Test deleting the file
-        val response = client.delete("/file/$fileId")
+        val response = client.delete("/file/$fileId") {
+            withAuth()
+        }
         
         assertEquals(HttpStatusCode.OK, response.status)
         
@@ -129,7 +141,7 @@ class PrivateRoutesTest {
         // Setup routing
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
         
@@ -154,11 +166,12 @@ class PrivateRoutesTest {
     fun testRejectsPathTraversalFileId() = testApplication {
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
 
         val response = client.put("/file/%2E%2E%2Fetc%2Fpasswd") {
+            withAuth()
             setBody("bad".toByteArray())
         }
 
@@ -169,14 +182,16 @@ class PrivateRoutesTest {
     fun testRejectsDotAndDotDotFileIds() = testApplication {
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
 
         val singleDotResponse = client.put("/file/.") {
+            withAuth()
             setBody("bad".toByteArray())
         }
         val doubleDotResponse = client.put("/file/..") {
+            withAuth()
             setBody("bad".toByteArray())
         }
 
@@ -188,7 +203,7 @@ class PrivateRoutesTest {
     fun testAllowsFileIdWithExtension() = testApplication {
         application {
             routing {
-                privateRoutes(storage, urlGenerator)
+                privateRoutes(storage, urlGenerator, privateApiToken)
             }
         }
 
@@ -196,9 +211,12 @@ class PrivateRoutesTest {
         val content = "Hello with extension".toByteArray()
 
         val putResponse = client.put("/file/$fileId") {
+            withAuth()
             setBody(content)
         }
-        val getResponse = client.get("/file/$fileId")
+        val getResponse = client.get("/file/$fileId") {
+            withAuth()
+        }
 
         assertEquals(HttpStatusCode.OK, putResponse.status)
         assertEquals(HttpStatusCode.OK, getResponse.status)
@@ -209,15 +227,44 @@ class PrivateRoutesTest {
     fun testUploadTooLargeReturns413() = testApplication {
         application {
             routing {
-                privateRoutes(storage, urlGenerator, maxUploadBytes = 5)
+                privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes = 5)
             }
         }
 
         val response = client.put("/file/too-large.txt") {
+            withAuth()
             setBody("123456".toByteArray())
         }
 
         assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
         assertNull(storage.getFile("too-large.txt"))
+    }
+
+    @Test
+    fun testMissingAuthorizationReturns401() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator, privateApiToken)
+            }
+        }
+
+        val response = client.get("/file/test-file")
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun testInvalidAuthorizationReturns401() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator, privateApiToken)
+            }
+        }
+
+        val response = client.get("/file/test-file") {
+            header(HttpHeaders.Authorization, "Bearer wrong-token")
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 }

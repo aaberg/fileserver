@@ -30,6 +30,8 @@ fun startServers() {
     val storageDirectory = fileserverConfig.property("storageDirectory").getString()
     val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
         ?: DEFAULT_MAX_UPLOAD_BYTES
+    val privateApiToken = System.getenv("PRIVATE_API_TOKEN")?.takeIf { it.isNotBlank() }
+        ?: throw IllegalStateException("PRIVATE_API_TOKEN must be set")
     
     // Initialize shared services
     val storage = FileStorage(storageDirectory)
@@ -43,7 +45,7 @@ fun startServers() {
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        configurePrivateServer(urlGenerator, storage, maxUploadBytes)
+        configurePrivateServer(urlGenerator, storage, privateApiToken, maxUploadBytes)
     }
     
     // Start both servers
@@ -67,6 +69,7 @@ fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileS
 fun Application.configurePrivateServer(
     urlGenerator: UrlGenerator,
     storage: FileStorage,
+    privateApiToken: String,
     maxUploadBytes: Long
 ) {
     install(ContentNegotiation) {
@@ -77,6 +80,6 @@ fun Application.configurePrivateServer(
         get("/") {
             call.respondText("Private API Server Running")
         }
-        privateRoutes(storage, urlGenerator, maxUploadBytes)
+        privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
     }
 }
