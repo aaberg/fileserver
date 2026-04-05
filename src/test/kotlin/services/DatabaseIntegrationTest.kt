@@ -3,16 +3,21 @@ package net.aabergs.services
 import net.aabergs.services.database.DatabaseFactory
 import org.junit.*
 import org.junit.Assert.*
+import java.nio.file.Files
+import java.nio.file.Path
 
 class DatabaseIntegrationTest {
     private lateinit var urlGenerator: UrlGenerator
+    private var testDbPath: Path? = null
     private val baseUrl = "http://localhost:9000"
     
     @Before
     fun setup() {
-        // Use SQLite for tests with a temporary database
+        // Use SQLite with an isolated temporary database file
+        val path = Files.createTempFile("fileserver-integration-", ".db")
+        testDbPath = path
         System.setProperty("DB_TYPE", "sqlite")
-        System.setProperty("DB_URL", "jdbc:sqlite:test-integration.db")
+        System.setProperty("DB_URL", "jdbc:sqlite:${path.toAbsolutePath()}")
         
         val databaseService = DatabaseFactory.createDatabaseService()
         urlGenerator = UrlGenerator(baseUrl, databaseService)
@@ -24,6 +29,7 @@ class DatabaseIntegrationTest {
         // Clear environment properties
         System.clearProperty("DB_TYPE")
         System.clearProperty("DB_URL")
+        testDbPath?.let { Files.deleteIfExists(it) }
     }
     
     @Test
