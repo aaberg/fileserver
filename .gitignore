@@ -37,3 +37,4 @@ out/
 
 ### Application specifics ###
 fileserver.db
+/*.db

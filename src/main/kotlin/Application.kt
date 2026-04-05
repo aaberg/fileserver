@@ -37,6 +37,10 @@ fun startServers() {
     val storage = FileStorage(storageDirectory)
     val databaseService = DatabaseFactory.createDatabaseService()
     val urlGenerator = UrlGenerator(publicBaseUrl, databaseService)
+
+    Runtime.getRuntime().addShutdownHook(Thread {
+        urlGenerator.close()
+    })
     
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
