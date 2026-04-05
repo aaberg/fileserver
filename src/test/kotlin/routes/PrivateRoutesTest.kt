@@ -3,10 +3,12 @@ package net.aabergs.routes
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.application.*
 import io.ktor.server.testing.*
 import io.ktor.server.routing.*
 import org.junit.*
 import org.junit.Assert.*
+import net.aabergs.configureCommonPlugins
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
@@ -22,6 +24,13 @@ class PrivateRoutesTest {
 
     private fun HttpRequestBuilder.withAuth() {
         header(HttpHeaders.Authorization, "Bearer $privateApiToken")
+    }
+
+    private fun Application.configurePrivateRoutesForTest(maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES) {
+        configureCommonPlugins()
+        routing {
+            privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
+        }
     }
     
     @Before
@@ -48,9 +57,7 @@ class PrivateRoutesTest {
     fun testUploadFile() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Test uploading a file
@@ -74,9 +81,7 @@ class PrivateRoutesTest {
     fun testGetFile() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Store a test file
@@ -97,9 +102,7 @@ class PrivateRoutesTest {
     fun testGetNonExistentFile() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Test getting a non-existent file
@@ -114,9 +117,7 @@ class PrivateRoutesTest {
     fun testDeleteFile() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Store a test file
@@ -140,9 +141,7 @@ class PrivateRoutesTest {
     fun testGeneratePublicURL() = testApplication {
         // Setup routing
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
         
         // Store a test file
@@ -165,9 +164,7 @@ class PrivateRoutesTest {
     @Test
     fun testRejectsPathTraversalFileId() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
 
         val response = client.put("/file/%2E%2E%2Fetc%2Fpasswd") {
@@ -176,14 +173,13 @@ class PrivateRoutesTest {
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("\"error\":\"bad_request\""))
     }
 
     @Test
     fun testRejectsDotAndDotDotFileIds() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
 
         val singleDotResponse = client.put("/file/.") {
@@ -202,9 +198,7 @@ class PrivateRoutesTest {
     @Test
     fun testAllowsFileIdWithExtension() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
 
         val fileId = "report.txt"
@@ -226,9 +220,7 @@ class PrivateRoutesTest {
     @Test
     fun testUploadTooLargeReturns413() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes = 5)
-            }
+            configurePrivateRoutesForTest(maxUploadBytes = 5)
         }
 
         val response = client.put("/file/too-large.txt") {
@@ -237,28 +229,26 @@ class PrivateRoutesTest {
         }
 
         assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+        assertTrue(response.bodyAsText().contains("\"error\":\"payload_too_large\""))
         assertNull(storage.getFile("too-large.txt"))
     }
 
     @Test
     fun testMissingAuthorizationReturns401() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
 
         val response = client.get("/file/test-file")
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("\"error\":\"unauthorized\""))
     }
 
     @Test
     fun testInvalidAuthorizationReturns401() = testApplication {
         application {
-            routing {
-                privateRoutes(storage, urlGenerator, privateApiToken)
-            }
+            configurePrivateRoutesForTest()
         }
 
         val response = client.get("/file/test-file") {
@@ -266,5 +256,6 @@ class PrivateRoutesTest {
         }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("\"error\":\"unauthorized\""))
     }
 }

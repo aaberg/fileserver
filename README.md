@@ -57,3 +57,13 @@ curl -X PUT \
   --data-binary "hello" \
   http://localhost:9001/file/example.txt
 ```
+
+## Runtime Configuration
+
+- `PRIVATE_API_TOKEN` (required): bearer token used for all `/file/*` private API calls.
+- `DB_TYPE`: `sqlite` (default) or `postgres`.
+- `DB_URL`: JDBC URL. Defaults to `jdbc:sqlite:fileserver.db` for SQLite.
+- `DB_USER` and `DB_PASSWORD`: required when `DB_TYPE=postgres`.
+- `fileserver.maxUploadBytes`: max upload size in bytes (default `10485760`).
+- `fileserver.timeouts.shutdownGracePeriodMillis`: graceful stop window in ms (default `5000`).
+- `fileserver.timeouts.shutdownTimeoutMillis`: hard stop timeout in ms (default `15000`).

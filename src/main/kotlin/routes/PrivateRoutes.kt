@@ -6,6 +6,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.plugins.*
+import net.aabergs.models.ErrorResponse
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
 import net.aabergs.services.FileStorage
@@ -29,21 +30,23 @@ private fun constantTimeEquals(left: String, right: String): Boolean {
     return MessageDigest.isEqual(left.toByteArray(), right.toByteArray())
 }
 
+private suspend fun ApplicationCall.respondUnauthorized(): Boolean {
+    respond(HttpStatusCode.Unauthorized, ErrorResponse("unauthorized", "Unauthorized"))
+    return false
+}
+
 private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: String): Boolean {
     val authorizationHeader = request.headers[HttpHeaders.Authorization] ?: run {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        return respondUnauthorized()
     }
 
     if (!authorizationHeader.startsWith("Bearer ")) {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        return respondUnauthorized()
     }
 
     val providedToken = authorizationHeader.removePrefix("Bearer ").trim()
     if (providedToken.isEmpty() || !constantTimeEquals(providedToken, privateApiToken)) {
-        respond(HttpStatusCode.Unauthorized, "Unauthorized")
-        return false
+        return respondUnauthorized()
     }
 
     return true
@@ -60,13 +63,14 @@ fun Route.privateRoutes(
             if (!call.requirePrivateApiAuth(privateApiToken)) {
                 return@put
             }
-            val id = call.requireValidFileId()
-            try {
-                storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
-                call.respond(HttpStatusCode.OK)
-            } catch (_: PayloadTooLargeException) {
-                call.respond(HttpStatusCode.PayloadTooLarge, "Upload too large")
+            call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()?.let { contentLength ->
+                if (contentLength > maxUploadBytes) {
+                    throw PayloadTooLargeException("Upload exceeds max size of $maxUploadBytes bytes")
+                }
             }
+            val id = call.requireValidFileId()
+            storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
+            call.respond(HttpStatusCode.OK)
         }
         
         get("/{id}") {
