@@ -9,6 +9,7 @@ import io.ktor.server.routing.*
 import org.junit.*
 import org.junit.Assert.*
 import net.aabergs.configureCommonPlugins
+import net.aabergs.configurePrivateServer
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
@@ -257,5 +258,17 @@ class PrivateRoutesTest {
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.bodyAsText().contains("\"error\":\"unauthorized\""))
+    }
+
+    @Test
+    fun testPrivateHealthEndpointIsOpen() = testApplication {
+        application {
+            configurePrivateServer(urlGenerator, storage, privateApiToken, DEFAULT_MAX_UPLOAD_BYTES)
+        }
+
+        val response = client.get("/health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("{\"status\":\"ok\"}", response.bodyAsText())
     }
 }

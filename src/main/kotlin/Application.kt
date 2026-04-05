@@ -115,8 +115,8 @@ fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileS
     configureCommonPlugins()
 
     routing {
-        get("/") {
-            call.respondText("Public File Server Running")
+        get("/health") {
+            call.respond(mapOf("status" to "ok"))
         }
         publicRoutes(urlGenerator, storage)
     }
@@ -131,8 +131,8 @@ fun Application.configurePrivateServer(
     configureCommonPlugins()
 
     routing {
-        get("/") {
-            call.respondText("Private API Server Running")
+        get("/health") {
+            call.respond(mapOf("status" to "ok"))
         }
         privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
     }
