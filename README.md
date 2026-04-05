@@ -105,3 +105,22 @@ PRIVATE_API_TOKEN=dev-token ./gradlew run
    - authenticated file upload/download
    - public URL creation and access
    - expected 401 and 400 negative cases
+
+## Private API Client Library
+
+The repository includes a framework-agnostic Kotlin client module for the private API:
+
+- Module: `private-api-client`
+- Transport: OkHttp
+
+Example usage:
+
+```kotlin
+val client = FileserverClient(
+    baseUrl = "http://localhost:9001",
+    bearerToken = "dev-token"
+)
+
+client.uploadFile("example.txt", "hello".toByteArray())
+val publicUrl = client.createPublicUrl("example.txt", durationSeconds = 60)
+```
