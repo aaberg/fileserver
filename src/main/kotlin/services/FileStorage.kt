@@ -18,7 +18,7 @@ class FileStorage(private val storageDirectory: String) {
     }
 
     private fun resolveSafePath(id: String): Path {
-        if (!FILE_ID_PATTERN.matches(id)) {
+        if (!FILE_ID_PATTERN.matches(id) || id == "." || id == "..") {
             throw IllegalArgumentException("Invalid file id")
         }
         val resolved = storagePath.resolve(id).normalize()

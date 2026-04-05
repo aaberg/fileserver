@@ -16,7 +16,7 @@ private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 
 private fun ApplicationCall.requireValidFileId(): String {
     val id = parameters["id"] ?: throw BadRequestException("Missing id")
-    if (!FILE_ID_PATTERN.matches(id)) {
+    if (!FILE_ID_PATTERN.matches(id) || id == "." || id == "..") {
         throw BadRequestException("Invalid id format")
     }
     return id
