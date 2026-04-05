@@ -25,6 +25,7 @@ private fun ApplicationCall.requireValidFileId(): String {
 }
 
 private fun constantTimeEquals(left: String, right: String): Boolean {
+    // Compare in constant time to reduce token timing side-channel leakage.
     return MessageDigest.isEqual(left.toByteArray(), right.toByteArray())
 }
 
