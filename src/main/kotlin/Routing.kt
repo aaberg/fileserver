@@ -8,7 +8,7 @@ import net.aabergs.routes.publicRoutes
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
 
-fun Application.configureRouting(storage: FileStorage, urlGenerator: UrlGenerator) {
+fun Application.configureRouting(storage: FileStorage, urlGenerator: UrlGenerator, privateApiToken: String) {
     routing {
         get("/") {
             call.respondText("File Server Running")
@@ -18,6 +18,6 @@ fun Application.configureRouting(storage: FileStorage, urlGenerator: UrlGenerato
         publicRoutes(urlGenerator, storage)
         
         // Private routes  
-        privateRoutes(storage, urlGenerator)
+        privateRoutes(storage, urlGenerator, privateApiToken)
     }
 }

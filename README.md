@@ -37,3 +37,22 @@ If the server starts successfully, you'll see the following output:
 2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
 ```
 
+## Private API Authentication
+
+Private endpoints under `/file/*` require a bearer token.
+
+- Set `PRIVATE_API_TOKEN` before starting the server.
+- Send `Authorization: Bearer <token>` on private API requests.
+
+Example:
+
+```bash
+PRIVATE_API_TOKEN=my-secret-token ./gradlew run
+```
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer my-secret-token" \
+  --data-binary "hello" \
+  http://localhost:9001/file/example.txt
+```

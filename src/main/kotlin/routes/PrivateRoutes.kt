@@ -11,6 +11,7 @@ import net.aabergs.models.PublicUrlResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
 import net.aabergs.services.UrlGenerator
+import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
@@ -23,13 +24,41 @@ private fun ApplicationCall.requireValidFileId(): String {
     return id
 }
 
+private fun constantTimeEquals(left: String, right: String): Boolean {
+    return MessageDigest.isEqual(left.toByteArray(), right.toByteArray())
+}
+
+private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: String): Boolean {
+    val authorizationHeader = request.headers[HttpHeaders.Authorization] ?: run {
+        respond(HttpStatusCode.Unauthorized, "Unauthorized")
+        return false
+    }
+
+    if (!authorizationHeader.startsWith("Bearer ")) {
+        respond(HttpStatusCode.Unauthorized, "Unauthorized")
+        return false
+    }
+
+    val providedToken = authorizationHeader.removePrefix("Bearer ").trim()
+    if (providedToken.isEmpty() || !constantTimeEquals(providedToken, privateApiToken)) {
+        respond(HttpStatusCode.Unauthorized, "Unauthorized")
+        return false
+    }
+
+    return true
+}
+
 fun Route.privateRoutes(
     storage: FileStorage,
     urlGenerator: UrlGenerator,
+    privateApiToken: String,
     maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES
 ) {
     route("/file") {
         put("/{id}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@put
+            }
             val id = call.requireValidFileId()
             try {
                 storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
@@ -40,6 +69,9 @@ fun Route.privateRoutes(
         }
         
         get("/{id}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@get
+            }
             val id = call.requireValidFileId()
             val filePath = storage.getFilePath(id)
             if (filePath != null) {
@@ -58,12 +90,18 @@ fun Route.privateRoutes(
         }
         
         delete("/{id}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@delete
+            }
             val id = call.requireValidFileId()
             storage.deleteFile(id)
             call.respond(HttpStatusCode.OK)
         }
         
         post("/{id}/public-url") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@post
+            }
             val id = call.requireValidFileId()
             val request = call.receive<PublicUrlRequest>()
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)
