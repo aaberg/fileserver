@@ -35,12 +35,12 @@ class FileserverClient(
 
             val body = response.body?.string().orEmpty()
             if (body.isBlank()) {
-                return true
+                return false
             }
 
             return runCatching {
                 json.decodeFromString(HealthResponse.serializer(), body).status == "ok"
-            }.getOrDefault(true)
+            }.getOrDefault(false)
         }
     }
 
@@ -52,10 +52,7 @@ class FileserverClient(
             .build()
 
         client.newCall(request).execute().use { response ->
-            ensureSuccess(
-                response.code,
-                if (response.isSuccessful) null else response.body?.string()
-            )
+            ensureSuccess(response)
         }
     }
 
@@ -83,7 +80,7 @@ class FileserverClient(
             .build()
 
         client.newCall(request).execute().use { response ->
-            ensureSuccess(response.code, response.body?.string())
+            ensureSuccess(response)
         }
     }
 
@@ -121,11 +118,11 @@ class FileserverClient(
         return builder.build()
     }
 
-    private fun ensureSuccess(statusCode: Int, body: String?) {
-        if (statusCode in 200..299) {
+    private fun ensureSuccess(response: okhttp3.Response) {
+        if (response.isSuccessful) {
             return
         }
-        throw mapError(statusCode, body)
+        throw mapError(response.code, response.body?.string())
     }
 
     private fun mapError(statusCode: Int, rawBody: String?): FileserverClientException {

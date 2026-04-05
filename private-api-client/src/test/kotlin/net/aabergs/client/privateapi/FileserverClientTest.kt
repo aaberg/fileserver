@@ -47,6 +47,28 @@ class FileserverClientTest {
     }
 
     @Test
+    fun healthReturnsFalseForMalformedBody() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("not-json")
+        )
+
+        val healthy = client.health()
+
+        assertFalse(healthy)
+    }
+
+    @Test
+    fun healthReturnsFalseForNonSuccessStatus() {
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        val healthy = client.health()
+
+        assertFalse(healthy)
+    }
+
+    @Test
     fun uploadSendsAuthHeaderAndBinaryBody() {
         server.enqueue(MockResponse().setResponseCode(200))
         val content = "hello".toByteArray()
