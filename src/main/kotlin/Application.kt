@@ -13,7 +13,6 @@ import io.ktor.serialization.kotlinx.json.*
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
-import net.aabergs.routes.UnauthorizedAccessException
 import net.aabergs.models.ErrorResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
@@ -35,12 +34,6 @@ fun Application.configureCommonPlugins() {
             call.respond(
                 io.ktor.http.HttpStatusCode.BadRequest,
                 ErrorResponse("bad_request", cause.message ?: "Bad request")
-            )
-        }
-        exception<UnauthorizedAccessException> { call, _ ->
-            call.respond(
-                io.ktor.http.HttpStatusCode.Unauthorized,
-                ErrorResponse("unauthorized", "Unauthorized")
             )
         }
         exception<PayloadTooLargeException> { call, cause ->

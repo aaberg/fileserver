@@ -6,6 +6,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.plugins.*
+import net.aabergs.models.ErrorResponse
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
 import net.aabergs.services.FileStorage
@@ -15,7 +16,6 @@ import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
-class UnauthorizedAccessException : RuntimeException("Unauthorized")
 
 private fun ApplicationCall.requireValidFileId(): String {
     val id = parameters["id"] ?: throw BadRequestException("Missing id")
@@ -30,18 +30,23 @@ private fun constantTimeEquals(left: String, right: String): Boolean {
     return MessageDigest.isEqual(left.toByteArray(), right.toByteArray())
 }
 
+private suspend fun ApplicationCall.respondUnauthorized(): Boolean {
+    respond(HttpStatusCode.Unauthorized, ErrorResponse("unauthorized", "Unauthorized"))
+    return false
+}
+
 private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: String): Boolean {
     val authorizationHeader = request.headers[HttpHeaders.Authorization] ?: run {
-        throw UnauthorizedAccessException()
+        return respondUnauthorized()
     }
 
     if (!authorizationHeader.startsWith("Bearer ")) {
-        throw UnauthorizedAccessException()
+        return respondUnauthorized()
     }
 
     val providedToken = authorizationHeader.removePrefix("Bearer ").trim()
     if (providedToken.isEmpty() || !constantTimeEquals(providedToken, privateApiToken)) {
-        throw UnauthorizedAccessException()
+        return respondUnauthorized()
     }
 
     return true
@@ -55,7 +60,9 @@ fun Route.privateRoutes(
 ) {
     route("/file") {
         put("/{id}") {
-            call.requirePrivateApiAuth(privateApiToken)
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@put
+            }
             call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()?.let { contentLength ->
                 if (contentLength > maxUploadBytes) {
                     throw PayloadTooLargeException("Upload exceeds max size of $maxUploadBytes bytes")
@@ -67,7 +74,9 @@ fun Route.privateRoutes(
         }
         
         get("/{id}") {
-            call.requirePrivateApiAuth(privateApiToken)
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@get
+            }
             val id = call.requireValidFileId()
             val filePath = storage.getFilePath(id)
             if (filePath != null) {
@@ -86,14 +95,18 @@ fun Route.privateRoutes(
         }
         
         delete("/{id}") {
-            call.requirePrivateApiAuth(privateApiToken)
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@delete
+            }
             val id = call.requireValidFileId()
             storage.deleteFile(id)
             call.respond(HttpStatusCode.OK)
         }
         
         post("/{id}/public-url") {
-            call.requirePrivateApiAuth(privateApiToken)
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@post
+            }
             val id = call.requireValidFileId()
             val request = call.receive<PublicUrlRequest>()
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)
