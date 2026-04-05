@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktor)
     id("org.graalvm.buildtools.native") version "1.0.0"
 }
@@ -18,10 +19,11 @@ kotlin {
 dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.config.yaml)
-//    implementation("io.ktor:ktor-serialization-kotlinx-json:3.4.2")
     implementation(libs.hikari.cp)
     implementation(libs.sqlite.jdbc)
     implementation(libs.postgresql)

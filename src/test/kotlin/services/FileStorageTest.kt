@@ -5,6 +5,7 @@ import org.junit.Assert.*
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import kotlin.test.assertFailsWith
 
 class FileStorageTest {
     private lateinit var storage: FileStorage
@@ -62,14 +63,35 @@ class FileStorageTest {
     
     @Test
     fun testStoreFileWithInvalidDirectory() {
-        // Create storage with invalid directory
-        val invalidStorage = FileStorage("/invalid/directory/path")
-        
         try {
+            // Creating storage with invalid directory should fail
+            val invalidStorage = FileStorage("/invalid/directory/path")
             invalidStorage.storeFile("test-file", "content".toByteArray())
-            fail("Expected IOException to be thrown")
+            fail("Expected file system exception to be thrown")
         } catch (e: Exception) {
             // Expected - could be IOException or other file system error
         }
+    }
+
+    @Test
+    fun testRejectDotAndDotDotIds() {
+        assertFailsWith<IllegalArgumentException> {
+            storage.storeFile(".", "content".toByteArray())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            storage.storeFile("..", "content".toByteArray())
+        }
+    }
+
+    @Test
+    fun testAllowIdWithDotExtension() {
+        val id = "archive.tar.gz"
+        val bytes = "content".toByteArray()
+
+        storage.storeFile(id, bytes)
+        val retrieved = storage.getFile(id)
+
+        assertNotNull(retrieved)
+        assertArrayEquals(bytes, retrieved)
     }
 }

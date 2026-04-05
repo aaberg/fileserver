@@ -149,4 +149,59 @@ class PrivateRoutesTest {
         assertTrue(urlGenerator.isPublicUrlValid(publicId))
         assertEquals(fileId, urlGenerator.getFileIdForPublicId(publicId))
     }
+
+    @Test
+    fun testRejectsPathTraversalFileId() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator)
+            }
+        }
+
+        val response = client.put("/file/%2E%2E%2Fetc%2Fpasswd") {
+            setBody("bad".toByteArray())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun testRejectsDotAndDotDotFileIds() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator)
+            }
+        }
+
+        val singleDotResponse = client.put("/file/.") {
+            setBody("bad".toByteArray())
+        }
+        val doubleDotResponse = client.put("/file/..") {
+            setBody("bad".toByteArray())
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, singleDotResponse.status)
+        assertEquals(HttpStatusCode.BadRequest, doubleDotResponse.status)
+    }
+
+    @Test
+    fun testAllowsFileIdWithExtension() = testApplication {
+        application {
+            routing {
+                privateRoutes(storage, urlGenerator)
+            }
+        }
+
+        val fileId = "report.txt"
+        val content = "Hello with extension".toByteArray()
+
+        val putResponse = client.put("/file/$fileId") {
+            setBody(content)
+        }
+        val getResponse = client.get("/file/$fileId")
+
+        assertEquals(HttpStatusCode.OK, putResponse.status)
+        assertEquals(HttpStatusCode.OK, getResponse.status)
+        assertEquals("Hello with extension", getResponse.bodyAsText())
+    }
 }
