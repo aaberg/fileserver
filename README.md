@@ -75,6 +75,7 @@ The root endpoint (`GET /`) is not used for health checks.
 ## Runtime Configuration
 
 - `PRIVATE_API_TOKEN` (required): bearer token used for all `/file/*` private API calls.
+- `FILESERVER_PUBLIC_BASE_URL` (optional override): absolute external base URL used when generating public file URLs (for example `https://files.example.com`). If unset, `fileserver.publicBaseUrl` from `server/src/main/resources/application.yaml` is used.
 - `DB_TYPE`: `sqlite` (default) or `postgres`.
 - `DB_URL`: JDBC URL. Defaults to `jdbc:sqlite:fileserver.db` for SQLite.
 - `DB_USER` and `DB_PASSWORD`: required when `DB_TYPE=postgres`.
