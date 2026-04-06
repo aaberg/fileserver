@@ -6,7 +6,10 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.plugins.*
-import net.aabergs.models.ErrorResponse
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import net.aabergs.respondJsonError
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
 import net.aabergs.services.FileStorage
@@ -16,6 +19,7 @@ import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
+private val ROUTE_JSON = Json
 
 private fun ApplicationCall.requireValidFileId(): String {
     val id = parameters["id"] ?: throw BadRequestException("Missing id")
@@ -31,7 +35,7 @@ private fun constantTimeEquals(left: String, right: String): Boolean {
 }
 
 private suspend fun ApplicationCall.respondUnauthorized(): Boolean {
-    respond(HttpStatusCode.Unauthorized, ErrorResponse("unauthorized", "Unauthorized"))
+    respondJsonError(HttpStatusCode.Unauthorized, "unauthorized", "Unauthorized")
     return false
 }
 
@@ -108,9 +112,15 @@ fun Route.privateRoutes(
                 return@post
             }
             val id = call.requireValidFileId()
-            val request = call.receive<PublicUrlRequest>()
+            val requestBody = call.receiveText()
+            val request = try {
+                ROUTE_JSON.decodeFromString(PublicUrlRequest.serializer(), requestBody)
+            } catch (_: SerializationException) {
+                throw BadRequestException("Invalid request payload")
+            }
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)
-            call.respond(PublicUrlResponse(publicUrl))
+            val responseBody = ROUTE_JSON.encodeToString(PublicUrlResponse.serializer(), PublicUrlResponse(publicUrl))
+            call.respondText(responseBody, ContentType.Application.Json)
         }
     }
 }
