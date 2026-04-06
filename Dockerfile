@@ -47,8 +47,7 @@ ENV DB_TYPE=sqlite
 ENV DB_URL=jdbc:sqlite:fileserver.db
 ENV FILESERVER_STORAGE_DIRECTORY=/data/files
 
-# Default persistent volume mount point
-VOLUME ["/data/files"]
+# Persistent storage path; mount /data/files explicitly at runtime if needed
 
 # Run as non-root user
 USER appuser
