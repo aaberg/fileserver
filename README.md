@@ -1,131 +1,121 @@
 # fileserver
 
-This project was created using the [Ktor Project Generator](https://start.ktor.io).
+Minimal file server with two endpoints:
 
-Here are some useful links to get you started:
+- Private API (`:9001`) for upload/download/delete and public URL generation (token protected)
+- Public API (`:9000`) for downloading files via expiring public IDs
 
-- [Ktor Documentation](https://ktor.io/docs/home.html)
-- [Ktor GitHub page](https://github.com/ktorio/ktor)
-- The [Ktor Slack chat](https://app.slack.com/client/T09229ZC6/C0A974TJ9). You'll need to [request an invite](https://surveys.jetbrains.com/s3/kotlin-slack-sign-up) to join.
+Typical deployment is behind a reverse proxy/load balancer (Traefik, Nginx, cloud LB) with persistent volume storage.
 
-## Features
-
-Here's a list of features included in this project:
-
-| Name                                               | Description                                                 |
-| ----------------------------------------------------|------------------------------------------------------------- |
-| [Routing](https://start.ktor.io/p/routing-default) | Allows to define structured routes and associated handlers. |
-
-## Building & Running
-
-To build or run the project, use one of the following tasks:
-
-| Task                                    | Description                                                          |
-| -----------------------------------------|---------------------------------------------------------------------- |
-| `./gradlew test`                        | Run the tests                                                        |
-| `./gradlew build`                       | Build everything                                                     |
-| `./gradlew :server:test`                | Run only server tests                                                |
-| `./gradlew :private-api-client:test`    | Run only client-library tests                                        |
-| `./gradlew :server:nativeCompile`       | Build GraalVM native server binary                                   |
-| `./gradlew :server:run`                 | Run the server module                                                |
-
-If the server starts successfully, you'll see the following output:
-
-```
-2024-12-04 14:32:45.584 [main] INFO  Application - Application started in 0.303 seconds.
-2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
-```
-
-## Private API Authentication
-
-Private endpoints under `/file/*` are served by the private server on port `9001` and require a bearer token.
-Public routes on port `9000` do not use this `Authorization` header requirement.
-
-- Set `PRIVATE_API_TOKEN` before starting the server.
-- Send `Authorization: Bearer <token>` only on requests to the private server (`http://localhost:9001/file/*`).
-
-Example:
-
-```bash
-PRIVATE_API_TOKEN=my-secret-token ./gradlew :server:run
-```
-
-```bash
-curl -X PUT \
-  -H "Authorization: Bearer my-secret-token" \
-  --data-binary "hello" \
-  http://localhost:9001/file/example.txt
-```
-
-## Health Endpoints
-
-Both servers expose an open health check endpoint:
-
-- Public server: `GET http://localhost:9000/health`
-- Private server: `GET http://localhost:9001/health`
-
-Each endpoint returns:
-
-```json
-{"status":"ok"}
-```
-
-The root endpoint (`GET /`) is not used for health checks.
-
-## Runtime Configuration
-
-- `PRIVATE_API_TOKEN` (required): bearer token used for all `/file/*` private API calls.
-- `FILESERVER_PUBLIC_BASE_URL` (optional override): absolute external base URL used when generating public file URLs (for example `https://files.example.com`). If unset, `fileserver.publicBaseUrl` from `server/src/main/resources/application.yaml` is used.
-- `FILESERVER_STORAGE_DIRECTORY` (optional override): storage path for uploaded files (for example `/data/files` when using a mounted volume). If unset, `fileserver.storageDirectory` from `server/src/main/resources/application.yaml` is used.
-- `DB_TYPE`: `sqlite` (default) or `postgres`.
-- `DB_URL`: JDBC URL. Defaults to `jdbc:sqlite:fileserver.db` for SQLite.
-- `DB_USER` and `DB_PASSWORD`: required when `DB_TYPE=postgres`.
-- `fileserver.maxUploadBytes`: max upload size in bytes (default `10485760`).
-- `fileserver.timeouts.shutdownGracePeriodMillis`: graceful stop window in ms (default `5000`).
-- `fileserver.timeouts.shutdownTimeoutMillis`: hard stop timeout in ms (default `15000`).
-
-Container example with a mounted volume:
+## Quick Start (Docker)
 
 ```bash
 docker run --rm \
   -e PRIVATE_API_TOKEN=dev-token \
+  -e FILESERVER_PUBLIC_BASE_URL=https://files.example.com \
   -e FILESERVER_STORAGE_DIRECTORY=/data/files \
   -v fileserver_data:/data/files \
   -p 9000:9000 -p 9001:9001 \
   ghcr.io/<owner>/<repo>:latest
 ```
 
-## Manual Verification (IntelliJ HTTP Client)
+Notes:
 
-This repository includes a ready-to-use IntelliJ HTTP client file:
+- Set `FILESERVER_PUBLIC_BASE_URL` to the external URL clients should use.
+- Mount a persistent volume and point `FILESERVER_STORAGE_DIRECTORY` at that mount.
+- Keep private API (`:9001`) protected by network policy/proxy rules.
 
-- Requests file: `manual-tests/fileserver.http`
-- Environment file: `manual-tests/http-client.env.json`
+## Quick Start (Docker Compose)
 
-Quick start:
+```yaml
+services:
+  fileserver:
+    image: ghcr.io/<owner>/<repo>:latest
+    container_name: fileserver
+    environment:
+      PRIVATE_API_TOKEN: ${PRIVATE_API_TOKEN}
+      FILESERVER_PUBLIC_BASE_URL: https://files.example.com
+      FILESERVER_STORAGE_DIRECTORY: /data/files
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - fileserver_data:/data/files
+    restart: unless-stopped
 
-1. Start the server locally:
-
-```bash
-PRIVATE_API_TOKEN=dev-token ./gradlew :server:run
+volumes:
+  fileserver_data:
 ```
 
-2. In IntelliJ, open `manual-tests/fileserver.http`.
-3. Select the `local` environment from `manual-tests/http-client.env.json`.
-4. Run requests top-to-bottom to verify:
-   - public/private health endpoints
-   - authenticated file upload/download
-   - public URL creation and access
-   - expected 401 and 400 negative cases
+## API Usage (curl)
 
-## Private API Client Library
+Upload a file through the private API:
 
-The repository includes a framework-agnostic Kotlin client module for the private API:
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer dev-token" \
+  --data-binary "hello" \
+  http://localhost:9001/file/example.txt
+```
+
+Generate a public URL (returns JSON with `publicUrl`):
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"duration": 10}' \
+  http://localhost:9001/file/example.txt/public-url
+```
+
+Download the file from the returned public URL:
+
+```bash
+curl -L "<publicUrl>"
+```
+
+Delete the private file:
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer dev-token" \
+  http://localhost:9001/file/example.txt
+```
+
+## Health Endpoints
+
+- Public health: `GET http://localhost:9000/health`
+- Private health: `GET http://localhost:9001/health`
+
+Both return:
+
+```json
+{"status":"ok"}
+```
+
+## Runtime Configuration
+
+Environment variables / overrides:
+
+- `PRIVATE_API_TOKEN` (required): bearer token required for `http://<host>:9001/file/*`.
+- `FILESERVER_PUBLIC_BASE_URL` (optional): external base URL for generated public links (for example `https://files.example.com`). Falls back to `fileserver.publicBaseUrl` in `server/src/main/resources/application.yaml`.
+- `FILESERVER_STORAGE_DIRECTORY` (optional): storage path for uploaded files (for example `/data/files`). Falls back to `fileserver.storageDirectory` in `server/src/main/resources/application.yaml`.
+- `DB_TYPE`: `sqlite` (default) or `postgres`.
+- `DB_URL`: JDBC URL. Defaults to SQLite local file DB.
+- `DB_USER` and `DB_PASSWORD`: required for PostgreSQL.
+
+App config defaults (`server/src/main/resources/application.yaml`):
+
+- `fileserver.maxUploadBytes` default: `10485760` (10 MiB)
+- `fileserver.timeouts.shutdownGracePeriodMillis` default: `5000`
+- `fileserver.timeouts.shutdownTimeoutMillis` default: `15000`
+
+## Kotlin Client Library
+
+The repository includes a framework-agnostic Kotlin client module:
 
 - Module: `private-api-client`
 - Transport: OkHttp
-
-Example usage:
 
 ```kotlin
 val client = FileserverClient(
@@ -136,3 +126,26 @@ val client = FileserverClient(
 client.uploadFile("example.txt", "hello".toByteArray())
 val publicUrl = client.createPublicUrl("example.txt", durationSeconds = 60)
 ```
+
+## Development
+
+Useful tasks:
+
+- `./gradlew test` - run all tests
+- `./gradlew build` - build all modules
+- `./gradlew :server:test` - run server tests only
+- `./gradlew :private-api-client:test` - run client tests only
+- `./gradlew :server:nativeCompile` - build GraalVM native server binary
+- `./gradlew :server:run` - run server locally
+
+Manual endpoint verification resources:
+
+- Requests: `manual-tests/fileserver.http`
+- IntelliJ environment: `manual-tests/http-client.env.json`
+
+## Production Notes
+
+- Run behind HTTPS termination at your proxy/LB.
+- Ensure `FILESERVER_PUBLIC_BASE_URL` matches the externally reachable URL.
+- Use persistent volumes for file storage.
+- Restrict access to the private API port (`9001`) to trusted callers only.
