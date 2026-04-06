@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root runtime user
 RUN useradd --system --create-home --shell /usr/sbin/nologin appuser
 
+# Prepare persistent storage directory inside the container
+RUN mkdir -p /data/files
+
 # Copy native binary
 WORKDIR /app
 COPY --from=build /app/server/build/native/nativeCompile/fileserver ./fileserver
@@ -34,7 +37,7 @@ COPY --from=build /app/server/build/native/nativeCompile/fileserver ./fileserver
 COPY server/src/main/resources/application.yaml .
 
 # Ensure runtime user can read/write app data
-RUN chown -R appuser:appuser /app
+RUN chown -R appuser:appuser /app /data/files
 
 # Expose ports
 EXPOSE 9000 9001
@@ -42,6 +45,10 @@ EXPOSE 9000 9001
 # Set environment variables for SQLite (default)
 ENV DB_TYPE=sqlite
 ENV DB_URL=jdbc:sqlite:fileserver.db
+ENV FILESERVER_STORAGE_DIRECTORY=/data/files
+
+# Default persistent volume mount point
+VOLUME ["/data/files"]
 
 # Run as non-root user
 USER appuser
