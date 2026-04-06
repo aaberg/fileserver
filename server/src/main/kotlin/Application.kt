@@ -1,5 +1,6 @@
 package net.aabergs
 
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.config.*
 import io.ktor.server.plugins.contentnegotiation.*
@@ -10,6 +11,8 @@ import io.ktor.server.engine.*
 import io.ktor.server.plugins.*
 import io.ktor.server.response.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
@@ -24,6 +27,17 @@ private data class ServerTimeouts(
     val shutdownGracePeriodMillis: Long,
     val shutdownTimeoutMillis: Long
 )
+
+private val ERROR_RESPONSE_JSON = Json
+
+internal suspend fun ApplicationCall.respondJsonError(
+    status: HttpStatusCode,
+    error: String,
+    message: String
+) {
+    val payload = ERROR_RESPONSE_JSON.encodeToString(ErrorResponse(error, message))
+    respondText(payload, ContentType.Application.Json, status)
+}
 
 internal fun resolvePublicBaseUrl(
     fileserverConfig: ApplicationConfig,
@@ -78,22 +92,17 @@ fun Application.configureCommonPlugins() {
 
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
-            call.respond(
-                io.ktor.http.HttpStatusCode.BadRequest,
-                ErrorResponse("bad_request", cause.message ?: "Bad request")
-            )
+            call.respondJsonError(HttpStatusCode.BadRequest, "bad_request", cause.message ?: "Bad request")
         }
         exception<PayloadTooLargeException> { call, cause ->
-            call.respond(
-                io.ktor.http.HttpStatusCode.PayloadTooLarge,
-                ErrorResponse("payload_too_large", cause.message ?: "Payload too large")
+            call.respondJsonError(
+                HttpStatusCode.PayloadTooLarge,
+                "payload_too_large",
+                cause.message ?: "Payload too large"
             )
         }
         exception<Throwable> { call, _ ->
-            call.respond(
-                io.ktor.http.HttpStatusCode.InternalServerError,
-                ErrorResponse("internal_error", "Internal server error")
-            )
+            call.respondJsonError(HttpStatusCode.InternalServerError, "internal_error", "Internal server error")
         }
     }
 }
