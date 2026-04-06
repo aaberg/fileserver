@@ -76,12 +76,24 @@ The root endpoint (`GET /`) is not used for health checks.
 
 - `PRIVATE_API_TOKEN` (required): bearer token used for all `/file/*` private API calls.
 - `FILESERVER_PUBLIC_BASE_URL` (optional override): absolute external base URL used when generating public file URLs (for example `https://files.example.com`). If unset, `fileserver.publicBaseUrl` from `server/src/main/resources/application.yaml` is used.
+- `FILESERVER_STORAGE_DIRECTORY` (optional override): storage path for uploaded files (for example `/data/files` when using a mounted volume). If unset, `fileserver.storageDirectory` from `server/src/main/resources/application.yaml` is used.
 - `DB_TYPE`: `sqlite` (default) or `postgres`.
 - `DB_URL`: JDBC URL. Defaults to `jdbc:sqlite:fileserver.db` for SQLite.
 - `DB_USER` and `DB_PASSWORD`: required when `DB_TYPE=postgres`.
 - `fileserver.maxUploadBytes`: max upload size in bytes (default `10485760`).
 - `fileserver.timeouts.shutdownGracePeriodMillis`: graceful stop window in ms (default `5000`).
 - `fileserver.timeouts.shutdownTimeoutMillis`: hard stop timeout in ms (default `15000`).
+
+Container example with a mounted volume:
+
+```bash
+docker run --rm \
+  -e PRIVATE_API_TOKEN=dev-token \
+  -e FILESERVER_STORAGE_DIRECTORY=/data/files \
+  -v fileserver_data:/data/files \
+  -p 9000:9000 -p 9001:9001 \
+  ghcr.io/<owner>/<repo>:latest
+```
 
 ## Manual Verification (IntelliJ HTTP Client)
 

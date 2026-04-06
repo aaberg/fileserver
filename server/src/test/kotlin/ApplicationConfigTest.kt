@@ -65,4 +65,64 @@ class ApplicationConfigTest {
             )
         }
     }
+
+    @Test
+    fun `uses yaml storageDirectory when no override is set`() {
+        val config = MapApplicationConfig(
+            "fileserver.storageDirectory" to "/tmp/fileserver"
+        ).config("fileserver")
+
+        val resolved = resolveStorageDirectory(
+            fileserverConfig = config,
+            propertyLookup = { null },
+            envLookup = { null }
+        )
+
+        assertEquals("/tmp/fileserver", resolved)
+    }
+
+    @Test
+    fun `uses system property storage override and normalizes trailing slash`() {
+        val config = MapApplicationConfig(
+            "fileserver.storageDirectory" to "/tmp/fileserver"
+        ).config("fileserver")
+
+        val resolved = resolveStorageDirectory(
+            fileserverConfig = config,
+            propertyLookup = { key -> if (key == "FILESERVER_STORAGE_DIRECTORY") "/data/files/" else null },
+            envLookup = { null }
+        )
+
+        assertEquals("/data/files", resolved)
+    }
+
+    @Test
+    fun `uses env storage override when property is not set`() {
+        val config = MapApplicationConfig(
+            "fileserver.storageDirectory" to "/tmp/fileserver"
+        ).config("fileserver")
+
+        val resolved = resolveStorageDirectory(
+            fileserverConfig = config,
+            propertyLookup = { null },
+            envLookup = { key -> if (key == "FILESERVER_STORAGE_DIRECTORY") "/mnt/files" else null }
+        )
+
+        assertEquals("/mnt/files", resolved)
+    }
+
+    @Test
+    fun `throws on blank storage directory`() {
+        val config = MapApplicationConfig(
+            "fileserver.storageDirectory" to "   "
+        ).config("fileserver")
+
+        assertFailsWith<IllegalStateException> {
+            resolveStorageDirectory(
+                fileserverConfig = config,
+                propertyLookup = { null },
+                envLookup = { null }
+            )
+        }
+    }
 }

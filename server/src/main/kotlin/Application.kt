@@ -53,6 +53,24 @@ internal fun resolvePublicBaseUrl(
     return normalized
 }
 
+internal fun resolveStorageDirectory(
+    fileserverConfig: ApplicationConfig,
+    propertyLookup: (String) -> String? = System::getProperty,
+    envLookup: (String) -> String? = System::getenv
+): String {
+    val configuredValue = propertyLookup("FILESERVER_STORAGE_DIRECTORY")
+        ?.takeIf { it.isNotBlank() }
+        ?: envLookup("FILESERVER_STORAGE_DIRECTORY")?.takeIf { it.isNotBlank() }
+        ?: fileserverConfig.property("storageDirectory").getString()
+
+    val normalized = configuredValue.trim().trimEnd('/')
+    if (normalized.isBlank()) {
+        throw IllegalStateException("Storage directory must not be blank")
+    }
+
+    return normalized
+}
+
 fun Application.configureCommonPlugins() {
     install(ContentNegotiation) {
         json()
@@ -92,7 +110,7 @@ fun startServers() {
     val publicPort = fileserverConfig.property("publicPort").getString().toInt()
     val privatePort = fileserverConfig.property("privatePort").getString().toInt()
     val publicBaseUrl = resolvePublicBaseUrl(fileserverConfig)
-    val storageDirectory = fileserverConfig.property("storageDirectory").getString()
+    val storageDirectory = resolveStorageDirectory(fileserverConfig)
     val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
         ?: DEFAULT_MAX_UPLOAD_BYTES
     val timeoutsConfig = fileserverConfig.config("timeouts")
