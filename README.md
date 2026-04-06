@@ -13,7 +13,6 @@ Typical deployment is behind a reverse proxy/load balancer (Traefik, Nginx, clou
 docker run --rm \
   -e PRIVATE_API_TOKEN=dev-token \
   -e FILESERVER_PUBLIC_BASE_URL=https://files.example.com \
-  -e FILESERVER_STORAGE_DIRECTORY=/data/files \
   -v fileserver_data:/data/files \
   -p 9000:9000 -p 9001:9001 \
   ghcr.io/<owner>/<repo>:latest
@@ -22,7 +21,7 @@ docker run --rm \
 Notes:
 
 - Set `FILESERVER_PUBLIC_BASE_URL` to the external URL clients should use.
-- Mount a persistent volume and point `FILESERVER_STORAGE_DIRECTORY` at that mount.
+- Mount a persistent volume at `/data/files` (default storage location in the container image).
 - Keep private API (`:9001`) protected by network policy/proxy rules.
 
 ## Quick Start (Docker Compose)
@@ -35,7 +34,6 @@ services:
     environment:
       PRIVATE_API_TOKEN: ${PRIVATE_API_TOKEN}
       FILESERVER_PUBLIC_BASE_URL: https://files.example.com
-      FILESERVER_STORAGE_DIRECTORY: /data/files
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -99,7 +97,7 @@ Environment variables / overrides:
 
 - `PRIVATE_API_TOKEN` (required): bearer token required for `http://<host>:9001/file/*`.
 - `FILESERVER_PUBLIC_BASE_URL` (optional): external base URL for generated public links (for example `https://files.example.com`). Falls back to `fileserver.publicBaseUrl` in `server/src/main/resources/application.yaml`.
-- `FILESERVER_STORAGE_DIRECTORY` (optional): storage path for uploaded files (for example `/data/files`). Falls back to `fileserver.storageDirectory` in `server/src/main/resources/application.yaml`.
+- `FILESERVER_STORAGE_DIRECTORY` (optional): storage path for uploaded files. In the Docker image this defaults to `/data/files`. Outside Docker, it falls back to `fileserver.storageDirectory` in `server/src/main/resources/application.yaml`.
 - `DB_TYPE`: `sqlite` (default) or `postgres`.
 - `DB_URL`: JDBC URL. Defaults to SQLite local file DB.
 - `DB_USER` and `DB_PASSWORD`: required for PostgreSQL.
