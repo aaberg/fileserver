@@ -26,6 +26,10 @@ class UrlGenerator(private val baseUrl: String, private val databaseService: Dat
     fun getFileIdForPublicId(publicId: String): String? {
         return databaseService.getPublicUrlInfo(publicId)?.fileId
     }
+
+    fun getPublicUrlInfo(publicId: String): PublicUrlInfo? {
+        return databaseService.getPublicUrlInfo(publicId)
+    }
     
     // Optional: cleanup expired URLs
     fun cleanupExpired() {

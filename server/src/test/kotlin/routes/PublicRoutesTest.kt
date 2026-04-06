@@ -63,6 +63,14 @@ class PublicRoutesTest {
         
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Hello, World!", response.bodyAsText())
+        val cacheControl = requireNotNull(response.headers[HttpHeaders.CacheControl])
+        assertTrue(cacheControl.contains("public"))
+        assertTrue(cacheControl.contains("must-revalidate"))
+        val maxAge = requireNotNull(Regex("max-age=(\\d+)").find(cacheControl)?.groupValues?.get(1)?.toInt())
+        assertTrue(maxAge > 0)
+        assertNotNull(response.headers[HttpHeaders.Expires])
+        assertNotNull(response.headers[HttpHeaders.ETag])
+        assertNotNull(response.headers[HttpHeaders.LastModified])
     }
     
     @Test
@@ -87,6 +95,7 @@ class PublicRoutesTest {
         val response = client.get("/$publicId")
         
         assertEquals(HttpStatusCode.NotFound, response.status)
+        assertNull(response.headers[HttpHeaders.CacheControl])
     }
     
     @Test
