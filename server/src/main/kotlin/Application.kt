@@ -18,11 +18,40 @@ import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
+import java.net.URI
 
 private data class ServerTimeouts(
     val shutdownGracePeriodMillis: Long,
     val shutdownTimeoutMillis: Long
 )
+
+internal fun resolvePublicBaseUrl(
+    fileserverConfig: ApplicationConfig,
+    propertyLookup: (String) -> String? = System::getProperty,
+    envLookup: (String) -> String? = System::getenv
+): String {
+    val configuredValue = propertyLookup("FILESERVER_PUBLIC_BASE_URL")
+        ?.takeIf { it.isNotBlank() }
+        ?: envLookup("FILESERVER_PUBLIC_BASE_URL")?.takeIf { it.isNotBlank() }
+        ?: fileserverConfig.property("publicBaseUrl").getString()
+
+    val normalized = configuredValue.trim().trimEnd('/')
+    if (normalized.isBlank()) {
+        throw IllegalStateException("Public base URL must not be blank")
+    }
+
+    val parsed = try {
+        URI(normalized)
+    } catch (_: Exception) {
+        throw IllegalStateException("Invalid public base URL: $configuredValue")
+    }
+
+    if ((parsed.scheme != "http" && parsed.scheme != "https") || parsed.host.isNullOrBlank()) {
+        throw IllegalStateException("Invalid public base URL: $configuredValue")
+    }
+
+    return normalized
+}
 
 fun Application.configureCommonPlugins() {
     install(ContentNegotiation) {
@@ -62,7 +91,7 @@ fun startServers() {
     val fileserverConfig = config.config("fileserver")
     val publicPort = fileserverConfig.property("publicPort").getString().toInt()
     val privatePort = fileserverConfig.property("privatePort").getString().toInt()
-    val publicBaseUrl = fileserverConfig.property("publicBaseUrl").getString()
+    val publicBaseUrl = resolvePublicBaseUrl(fileserverConfig)
     val storageDirectory = fileserverConfig.property("storageDirectory").getString()
     val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
         ?: DEFAULT_MAX_UPLOAD_BYTES
