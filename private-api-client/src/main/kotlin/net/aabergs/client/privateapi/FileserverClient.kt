@@ -1,7 +1,6 @@
 package net.aabergs.client.privateapi
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import net.aabergs.client.privateapi.dto.CreatePublicUrlRequest
 import net.aabergs.client.privateapi.dto.CreatePublicUrlResponse
@@ -84,8 +83,8 @@ class FileserverClient(
         }
     }
 
-    fun createPublicUrl(id: String, durationSeconds: Long): String {
-        val payload = json.encodeToString(CreatePublicUrlRequest(durationSeconds))
+    fun createPublicUrl(id: String, durationMinutes: Long): String {
+        val payload = json.encodeToString(CreatePublicUrlRequest(durationMinutes))
         val request = Request.Builder()
             .url(url("file", id, "public-url"))
             .post(payload.toRequestBody("application/json".toMediaType()))
