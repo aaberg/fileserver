@@ -12,8 +12,10 @@ import kotlinx.serialization.json.Json
 import net.aabergs.respondJsonError
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
+import net.aabergs.models.TemporaryFileUploadResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import java.security.MessageDigest
 
@@ -58,9 +60,12 @@ private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: Strin
 
 fun Route.privateRoutes(
     storage: FileStorage,
+    temporaryStorage: TemporaryFileStorage,
     urlGenerator: UrlGenerator,
     privateApiToken: String,
-    maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES
+    maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES,
+    tempUploadMaxBytes: Long = maxUploadBytes,
+    tempTtlSeconds: Long = 3600
 ) {
     route("/file") {
         put("/{id}") {
@@ -120,6 +125,78 @@ fun Route.privateRoutes(
             }
             val publicUrl = urlGenerator.generatePublicUrl(id, request.duration)
             val responseBody = ROUTE_JSON.encodeToString(PublicUrlResponse.serializer(), PublicUrlResponse(publicUrl))
+            call.respondText(responseBody, ContentType.Application.Json)
+        }
+    }
+
+    route("/temp-file") {
+        post {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@post
+            }
+            call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()?.let { contentLength ->
+                if (contentLength > tempUploadMaxBytes) {
+                    throw PayloadTooLargeException("Upload exceeds max size of $tempUploadMaxBytes bytes")
+                }
+            }
+
+            val info = temporaryStorage.storeTemporaryFromStream(call.receiveStream(), tempUploadMaxBytes, tempTtlSeconds)
+            val response = TemporaryFileUploadResponse(info.tempFileId, info.expiresAt)
+            call.respondText(ROUTE_JSON.encodeToString(TemporaryFileUploadResponse.serializer(), response), ContentType.Application.Json)
+        }
+
+        delete("/{tempFileId}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@delete
+            }
+            val tempFileId = call.parameters["tempFileId"] ?: throw BadRequestException("Missing tempFileId")
+            temporaryStorage.deleteTemporaryFile(tempFileId)
+            call.respond(HttpStatusCode.OK)
+        }
+
+        post("/{tempFileId}/promote/{id}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@post
+            }
+            val tempFileId = call.parameters["tempFileId"] ?: throw BadRequestException("Missing tempFileId")
+            val id = call.requireValidFileId()
+
+            val destinationPath = storage.getDestinationPath(id)
+            try {
+                temporaryStorage.promoteTemporaryFile(tempFileId, destinationPath)
+            } catch (_: IllegalArgumentException) {
+                call.respond(HttpStatusCode.NotFound, "Temporary file not found")
+                return@post
+            }
+            urlGenerator.promoteTemporaryReferences(tempFileId, id)
+            call.respond(HttpStatusCode.OK)
+        }
+
+        post("/{tempFileId}/public-url") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@post
+            }
+            val tempFileId = call.parameters["tempFileId"] ?: throw BadRequestException("Missing tempFileId")
+            val tempInfo = temporaryStorage.getTemporaryFileInfo(tempFileId)
+            if (tempInfo == null || System.currentTimeMillis() >= tempInfo.expiresAt) {
+                call.respond(HttpStatusCode.NotFound, "Temporary file not found")
+                return@post
+            }
+
+            val requestBody = call.receiveText()
+            val request = try {
+                ROUTE_JSON.decodeFromString(PublicUrlRequest.serializer(), requestBody)
+            } catch (_: SerializationException) {
+                throw BadRequestException("Invalid request payload")
+            }
+
+            val generated = urlGenerator.generateTemporaryPublicUrl(tempFileId, request.duration)
+            temporaryStorage.extendExpiry(tempFileId, generated.expiresAt)
+
+            val responseBody = ROUTE_JSON.encodeToString(
+                PublicUrlResponse.serializer(),
+                PublicUrlResponse(generated.url)
+            )
             call.respondText(responseBody, ContentType.Application.Json)
         }
     }

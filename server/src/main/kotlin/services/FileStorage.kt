@@ -5,7 +5,6 @@ import java.io.InputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 
 class FileStorage(private val storageDirectory: String) {
@@ -43,39 +42,7 @@ class FileStorage(private val storageDirectory: String) {
 
     fun storeFileFromStream(id: String, input: InputStream, maxUploadBytes: Long) {
         val filePath = resolveSafePath(id)
-        val tempPath = Files.createTempFile(storagePath, "upload-", ".tmp")
-
-        try {
-            input.use { stream ->
-                Files.newOutputStream(
-                    tempPath,
-                    StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.WRITE
-                ).use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var totalBytes = 0L
-
-                    while (true) {
-                        val bytesRead = stream.read(buffer)
-                        if (bytesRead == -1) {
-                            break
-                        }
-
-                        totalBytes += bytesRead
-                        if (totalBytes > maxUploadBytes) {
-                            throw PayloadTooLargeException("Upload exceeds max size of $maxUploadBytes bytes")
-                        }
-
-                        output.write(buffer, 0, bytesRead)
-                    }
-                }
-            }
-
-            Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } catch (e: Exception) {
-            Files.deleteIfExists(tempPath)
-            throw e
-        }
+        StreamFileWriter.writeStreamAtomically(storagePath, filePath, input, maxUploadBytes)
     }
     
     fun getFile(id: String): ByteArray? {
@@ -101,6 +68,10 @@ class FileStorage(private val storageDirectory: String) {
         if (!Files.deleteIfExists(filePath) && Files.exists(filePath)) {
             throw IOException("Failed to delete file: $filePath")
         }
+    }
+
+    fun getDestinationPath(id: String): Path {
+        return resolveSafePath(id)
     }
 }
 

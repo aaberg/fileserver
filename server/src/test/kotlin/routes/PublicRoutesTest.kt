@@ -9,6 +9,7 @@ import org.junit.*
 import org.junit.Assert.*
 import net.aabergs.configurePublicServer
 import net.aabergs.services.FileStorage
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
 import java.io.File
@@ -16,6 +17,7 @@ import java.nio.file.Files
 
 class PublicRoutesTest {
     private lateinit var storage: FileStorage
+    private lateinit var temporaryStorage: TemporaryFileStorage
     private lateinit var urlGenerator: UrlGenerator
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
     private val baseUrl = "http://localhost:9000"
@@ -23,6 +25,7 @@ class PublicRoutesTest {
     @Before
     fun setup() {
         storage = FileStorage(testDir)
+        temporaryStorage = TemporaryFileStorage(testDir)
         // Use SQLite for tests with a temporary database
         System.setProperty("DB_TYPE", "sqlite")
         System.setProperty("DB_URL", "jdbc:sqlite::memory:")
@@ -45,7 +48,7 @@ class PublicRoutesTest {
         // Setup routing
         application {
             routing {
-                publicRoutes(urlGenerator, storage)
+                publicRoutes(urlGenerator, storage, temporaryStorage)
             }
         }
         
@@ -78,7 +81,7 @@ class PublicRoutesTest {
         // Setup routing
         application {
             routing {
-                publicRoutes(urlGenerator, storage)
+                publicRoutes(urlGenerator, storage, temporaryStorage)
             }
         }
         
@@ -103,7 +106,7 @@ class PublicRoutesTest {
         // Setup routing
         application {
             routing {
-                publicRoutes(urlGenerator, storage)
+                publicRoutes(urlGenerator, storage, temporaryStorage)
             }
         }
         
@@ -116,12 +119,34 @@ class PublicRoutesTest {
     @Test
     fun testPublicHealthEndpoint() = testApplication {
         application {
-            configurePublicServer(urlGenerator, storage)
+            configurePublicServer(urlGenerator, storage, temporaryStorage)
         }
 
         val response = client.get("/health")
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("{\"status\":\"ok\"}", response.bodyAsText())
+    }
+
+    @Test
+    fun testPublicRouteWithTemporaryPublicUrl() = testApplication {
+        application {
+            routing {
+                publicRoutes(urlGenerator, storage, temporaryStorage)
+            }
+        }
+
+        val tempInfo = temporaryStorage.storeTemporaryFromStream(
+            "tmp-content".byteInputStream(),
+            maxUploadBytes = 1024,
+            ttlSeconds = 300
+        )
+        val publicUrl = urlGenerator.generateTemporaryPublicUrl(tempInfo.tempFileId, 5).url
+        val publicId = publicUrl.substringAfterLast("/")
+
+        val response = client.get("/$publicId")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("tmp-content", response.bodyAsText())
     }
 }

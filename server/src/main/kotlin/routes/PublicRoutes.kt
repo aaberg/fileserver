@@ -6,6 +6,8 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.plugins.*
 import net.aabergs.services.FileStorage
+import net.aabergs.services.FileReferenceType
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import java.time.Instant
 import java.time.ZoneOffset
@@ -17,7 +19,7 @@ private fun toHttpDate(epochMillis: Long): String {
     return HTTP_DATE_FORMAT.format(Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC))
 }
 
-fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage) {
+fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage, temporaryStorage: TemporaryFileStorage) {
     get("/{publicId}") {
         val publicId = call.parameters["publicId"] ?: throw BadRequestException("Missing publicId")
 
@@ -32,7 +34,11 @@ fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage) {
             return@get
         }
 
-        val filePath = storage.getFilePath(urlInfo.fileId)
+        val fileRef = urlGenerator.parseReference(urlInfo.fileRef)
+        val filePath = when (fileRef.type) {
+            FileReferenceType.PERMANENT -> storage.getFilePath(fileRef.id)
+            FileReferenceType.TEMPORARY -> temporaryStorage.getTemporaryFilePathIfValid(fileRef.id, now)
+        }
 
         if (filePath != null) {
             val file = filePath.toFile()

@@ -147,4 +147,52 @@ class FileserverClientTest {
         assertEquals("/file/report.txt", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
     }
+
+    @Test
+    fun uploadTemporaryFileParsesResponse() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"tempFileId\":\"123e4567-e89b-12d3-a456-426614174000\",\"expiresAt\":1700000000000}")
+        )
+
+        val result = client.uploadTemporaryFile("tmp".toByteArray())
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/temp-file", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertEquals("123e4567-e89b-12d3-a456-426614174000", result.tempFileId)
+        assertEquals(1700000000000, result.expiresAt)
+    }
+
+    @Test
+    fun promoteTemporaryFileUsesExpectedEndpoint() {
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        client.promoteTemporaryFile("123e4567-e89b-12d3-a456-426614174000", "final.txt")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/temp-file/123e4567-e89b-12d3-a456-426614174000/promote/final.txt", request.path)
+    }
+
+    @Test
+    fun createPublicUrlForTemporaryFileParsesResponse() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"publicUrl\":\"http://localhost:9000/temp123\"}")
+        )
+
+        val result = client.createPublicUrlForTemporaryFile("123e4567-e89b-12d3-a456-426614174000", 5)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/temp-file/123e4567-e89b-12d3-a456-426614174000/public-url", request.path)
+        assertContains(request.body.readUtf8(), "\"duration\":5")
+        assertEquals("http://localhost:9000/temp123", result)
+    }
 }

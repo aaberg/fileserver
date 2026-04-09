@@ -11,6 +11,7 @@ import org.junit.Assert.*
 import net.aabergs.configureCommonPlugins
 import net.aabergs.configurePrivateServer
 import net.aabergs.services.FileStorage
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
 import java.io.File
@@ -18,6 +19,7 @@ import java.nio.file.Files
 
 class PrivateRoutesTest {
     private lateinit var storage: FileStorage
+    private lateinit var temporaryStorage: TemporaryFileStorage
     private lateinit var urlGenerator: UrlGenerator
     private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
@@ -30,13 +32,14 @@ class PrivateRoutesTest {
     private fun Application.configurePrivateRoutesForTest(maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES) {
         configureCommonPlugins()
         routing {
-            privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
+            privateRoutes(storage, temporaryStorage, urlGenerator, privateApiToken, maxUploadBytes)
         }
     }
     
     @Before
     fun setup() {
         storage = FileStorage(testDir)
+        temporaryStorage = TemporaryFileStorage(testDir)
         // Use SQLite for tests with a temporary database
         System.setProperty("DB_TYPE", "sqlite")
         System.setProperty("DB_URL", "jdbc:sqlite::memory:")
@@ -263,12 +266,66 @@ class PrivateRoutesTest {
     @Test
     fun testPrivateHealthEndpointIsOpen() = testApplication {
         application {
-            configurePrivateServer(urlGenerator, storage, privateApiToken, DEFAULT_MAX_UPLOAD_BYTES)
+            configurePrivateServer(
+                urlGenerator,
+                storage,
+                temporaryStorage,
+                privateApiToken,
+                DEFAULT_MAX_UPLOAD_BYTES,
+                DEFAULT_MAX_UPLOAD_BYTES,
+                3600
+            )
         }
 
         val response = client.get("/health")
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("{\"status\":\"ok\"}", response.bodyAsText())
+    }
+
+    @Test
+    fun testTemporaryUploadAndPromoteFlow() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val uploadResponse = client.post("/temp-file") {
+            withAuth()
+            setBody("temporary-content".toByteArray())
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+
+        val body = uploadResponse.bodyAsText()
+        val tempFileId = Regex("\"tempFileId\":\"([^\"]+)\"").find(body)?.groupValues?.get(1)
+        assertNotNull(tempFileId)
+
+        val promoteResponse = client.post("/temp-file/$tempFileId/promote/promoted.txt") {
+            withAuth()
+        }
+        assertEquals(HttpStatusCode.OK, promoteResponse.status)
+        assertEquals("temporary-content", storage.getFile("promoted.txt")?.toString(Charsets.UTF_8))
+    }
+
+    @Test
+    fun testCreatePublicUrlForTemporaryFile() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val uploadResponse = client.post("/temp-file") {
+            withAuth()
+            setBody("temporary-content".toByteArray())
+        }
+        val tempFileId = Regex("\"tempFileId\":\"([^\"]+)\"").find(uploadResponse.bodyAsText())?.groupValues?.get(1)
+        assertNotNull(tempFileId)
+
+        val publicUrlResponse = client.post("/temp-file/$tempFileId/public-url") {
+            withAuth()
+            contentType(ContentType.Application.Json)
+            setBody("{\"duration\":5}")
+        }
+
+        assertEquals(HttpStatusCode.OK, publicUrlResponse.status)
+        assertTrue(publicUrlResponse.bodyAsText().contains("\"publicUrl\":"))
     }
 }

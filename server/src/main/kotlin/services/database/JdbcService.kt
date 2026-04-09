@@ -50,13 +50,13 @@ class JdbcService(private val config: JdbcConfig) : DatabaseService {
         }
     }
 
-    override fun insertPublicUrl(publicId: String, fileId: String, expiresAt: Long) {
-        val sql = "INSERT INTO public_urls (public_id, file_id, expires_at) VALUES (?, ?, ?)"
+    override fun insertPublicUrl(publicId: String, fileRef: String, expiresAt: Long) {
+        val sql = "INSERT INTO public_urls (public_id, file_ref, expires_at) VALUES (?, ?, ?)"
         
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
                 stmt.setString(1, publicId)
-                stmt.setString(2, fileId)
+                stmt.setString(2, fileRef)
                 stmt.setLong(3, expiresAt)
                 stmt.executeUpdate()
             }
@@ -64,19 +64,31 @@ class JdbcService(private val config: JdbcConfig) : DatabaseService {
     }
 
     override fun getPublicUrlInfo(publicId: String): PublicUrlInfo? {
-        val sql = "SELECT file_id, expires_at FROM public_urls WHERE public_id = ?"
+        val sql = "SELECT file_ref, expires_at FROM public_urls WHERE public_id = ?"
         
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
                 stmt.setString(1, publicId)
                 stmt.executeQuery().use { rs ->
                     if (rs.next()) {
-                        return PublicUrlInfo(rs.getString("file_id"), rs.getLong("expires_at"))
+                        return PublicUrlInfo(rs.getString("file_ref"), rs.getLong("expires_at"))
                     }
                 }
             }
         }
         return null
+    }
+
+    override fun updateFileReferences(oldFileRef: String, newFileRef: String) {
+        val sql = "UPDATE public_urls SET file_ref = ? WHERE file_ref = ?"
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, newFileRef)
+                stmt.setString(2, oldFileRef)
+                stmt.executeUpdate()
+            }
+        }
     }
 
     override fun cleanupExpired() {

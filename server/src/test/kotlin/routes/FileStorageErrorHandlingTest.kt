@@ -10,12 +10,14 @@ import org.junit.*
 import org.junit.Assert.*
 import net.aabergs.configureCommonPlugins
 import net.aabergs.services.FileStorage
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import java.io.File
 import java.nio.file.Files
 
 class FileStorageErrorHandlingTest {
     private lateinit var storage: FileStorage
+    private lateinit var temporaryStorage: TemporaryFileStorage
     private lateinit var urlGenerator: UrlGenerator
     private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
@@ -24,13 +26,14 @@ class FileStorageErrorHandlingTest {
     private fun Application.configurePrivateRoutesForTest() {
         configureCommonPlugins()
         routing {
-            privateRoutes(storage, urlGenerator, privateApiToken)
+            privateRoutes(storage, temporaryStorage, urlGenerator, privateApiToken)
         }
     }
     
     @Before
     fun setup() {
         storage = FileStorage(testDir)
+        temporaryStorage = TemporaryFileStorage(testDir)
         // Use SQLite for tests with a temporary database
         System.setProperty("DB_TYPE", "sqlite")
         System.setProperty("DB_URL", "jdbc:sqlite::memory:")
