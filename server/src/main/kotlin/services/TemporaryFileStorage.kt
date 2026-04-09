@@ -81,17 +81,35 @@ class TemporaryFileStorage(storageDirectory: String) {
             return
         }
 
+        val entries = mutableListOf<Path>()
         Files.list(tempRoot).use { paths ->
-            paths.filter { it.fileName.toString().endsWith(".meta") }
-                .forEach { meta ->
-                    val id = meta.fileName.toString().removeSuffix(".meta")
-                    val expiresAt = runCatching { Files.readString(meta).trim().toLong() }.getOrNull()
-                    if (expiresAt == null || expiresAt <= now) {
-                        Files.deleteIfExists(filePath(id))
-                        Files.deleteIfExists(meta)
-                    }
-                }
+            paths.forEach { entries.add(it) }
         }
+
+        val metaIds = entries
+            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta") }
+            .map { it.fileName.toString().removeSuffix(".meta") }
+            .toSet()
+
+        entries
+            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta") }
+            .forEach { meta ->
+                val id = meta.fileName.toString().removeSuffix(".meta")
+                val expiresAt = runCatching { Files.readString(meta).trim().toLong() }.getOrNull()
+                if (expiresAt == null || expiresAt <= now || !Files.exists(filePath(id))) {
+                    Files.deleteIfExists(filePath(id))
+                    Files.deleteIfExists(meta)
+                }
+            }
+
+        entries
+            .filter { Files.isRegularFile(it) && !it.fileName.toString().endsWith(".meta") }
+            .forEach { file ->
+                val id = file.fileName.toString()
+                if (!metaIds.contains(id)) {
+                    Files.deleteIfExists(file)
+                }
+            }
     }
 
     private fun writeExpiresAt(tempFileId: String, expiresAt: Long) {

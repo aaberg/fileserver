@@ -4,6 +4,8 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -43,5 +45,38 @@ class TemporaryFileStorageTest {
 
         assertEquals("content", fileStorage.getFile("final.txt")?.toString(Charsets.UTF_8))
         assertNull(temporaryStorage.getTemporaryFileInfo(info.tempFileId))
+    }
+
+    @Test
+    fun cleanupDeletesOrphanTemporaryFileWithoutMeta() {
+        val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
+        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta")
+        Files.deleteIfExists(metaPath)
+
+        temporaryStorage.cleanupExpiredTemporaryFiles()
+
+        assertFalse(Files.exists(info.filePath))
+    }
+
+    @Test
+    fun cleanupDeletesMetaWhenFileIsMissing() {
+        val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
+        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta")
+        Files.deleteIfExists(info.filePath)
+
+        temporaryStorage.cleanupExpiredTemporaryFiles()
+
+        assertFalse(Files.exists(metaPath))
+    }
+
+    @Test
+    fun cleanupKeepsUnexpiredFileWithMeta() {
+        val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
+        val now = System.currentTimeMillis()
+
+        temporaryStorage.cleanupExpiredTemporaryFiles(now)
+
+        assertTrue(Files.exists(info.filePath))
+        assertNotNull(temporaryStorage.getTemporaryFileInfo(info.tempFileId))
     }
 }
