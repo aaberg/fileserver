@@ -45,7 +45,9 @@ class JdbcService(private val config: JdbcConfig) : DatabaseService {
     private fun createTableIfNotExists() {
         dataSource.connection.use { conn ->
             conn.createStatement().use { stmt ->
-                stmt.execute(config.tableSchema)
+                config.tableSchema.split(";").filter { it.isNotBlank() }.forEach { sql ->
+                    stmt.execute(sql.trim())
+                }
             }
         }
     }
@@ -86,6 +88,70 @@ class JdbcService(private val config: JdbcConfig) : DatabaseService {
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
                 stmt.setLong(1, now)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    override fun insertTemporaryFile(fileId: String, expiresAt: Long) {
+        val sql = "INSERT INTO temporary_files (file_id, created_at, expires_at, status) VALUES (?, ?, ?, 'pending')"
+        
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, fileId)
+                stmt.setLong(2, System.currentTimeMillis())
+                stmt.setLong(3, expiresAt)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
+    override fun claimExpiredTemporaryFiles(): List<String> {
+        val now = System.currentTimeMillis()
+        val claimed = mutableListOf<String>()
+        
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement("SELECT file_id FROM temporary_files WHERE expires_at < ? AND status = 'pending'")
+                    .use { selectStmt ->
+                        selectStmt.setLong(1, now)
+                        selectStmt.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                claimed.add(rs.getString("file_id"))
+                            }
+                        }
+                    }
+                
+                if (claimed.isNotEmpty()) {
+                    conn.prepareStatement("UPDATE temporary_files SET status = 'deleting' WHERE file_id = ?")
+                        .use { updateStmt ->
+                            for (fileId in claimed) {
+                                updateStmt.setString(1, fileId)
+                                updateStmt.addBatch()
+                            }
+                            updateStmt.executeBatch()
+                        }
+                }
+                
+                conn.commit()
+            } catch (e: Exception) {
+                conn.rollback()
+                throw e
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+        
+        return claimed
+    }
+
+    override fun removeTemporaryFile(fileId: String) {
+        val sql = "DELETE FROM temporary_files WHERE file_id = ?"
+        
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, fileId)
                 stmt.executeUpdate()
             }
         }

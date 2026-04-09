@@ -12,13 +12,18 @@ import kotlinx.serialization.json.Json
 import net.aabergs.respondJsonError
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
+import net.aabergs.models.UpdateFileRequest
+import net.aabergs.models.UpdateFileResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
 import net.aabergs.services.UrlGenerator
+import net.aabergs.services.database.DatabaseService
 import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
+const val DEFAULT_TEMP_FILE_TTL_SECONDS: Long = 12 * 60 * 60
+const val MAX_TEMP_FILE_TTL_SECONDS: Long = 24 * 60 * 60
 private val ROUTE_JSON = Json
 
 private fun ApplicationCall.requireValidFileId(): String {
@@ -59,8 +64,11 @@ private suspend fun ApplicationCall.requirePrivateApiAuth(privateApiToken: Strin
 fun Route.privateRoutes(
     storage: FileStorage,
     urlGenerator: UrlGenerator,
+    databaseService: DatabaseService,
     privateApiToken: String,
-    maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES
+    maxUploadBytes: Long = DEFAULT_MAX_UPLOAD_BYTES,
+    defaultTempFileTtlSeconds: Long = DEFAULT_TEMP_FILE_TTL_SECONDS,
+    maxTempFileTtlSeconds: Long = MAX_TEMP_FILE_TTL_SECONDS
 ) {
     route("/file") {
         put("/{id}") {
@@ -73,8 +81,47 @@ fun Route.privateRoutes(
                 }
             }
             val id = call.requireValidFileId()
+            val temporary = call.request.queryParameters["temporary"]?.toBoolean() ?: false
+            val ttl = call.request.queryParameters["ttl"]?.toLongOrNull() ?: defaultTempFileTtlSeconds
+            val effectiveTtl = if (temporary) minOf(ttl, maxTempFileTtlSeconds) else 0L
+            
             storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
+            
+            if (temporary) {
+                val expiresAt = System.currentTimeMillis() + effectiveTtl * 1000
+                databaseService.insertTemporaryFile(id, expiresAt)
+            }
+            
             call.respond(HttpStatusCode.OK)
+        }
+        
+        patch("/{id}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@patch
+            }
+            val id = call.requireValidFileId()
+            val requestBody = call.receiveText()
+            val request = try {
+                ROUTE_JSON.decodeFromString(UpdateFileRequest.serializer(), requestBody)
+            } catch (_: SerializationException) {
+                throw BadRequestException("Invalid request payload")
+            }
+            
+            val filePath = storage.getFilePath(id)
+            if (filePath == null) {
+                call.respond(HttpStatusCode.NotFound, "File not found")
+                return@patch
+            }
+            
+            if (!request.temporary) {
+                databaseService.removeTemporaryFile(id)
+            }
+            
+            val responseBody = ROUTE_JSON.encodeToString(
+                UpdateFileResponse.serializer(),
+                UpdateFileResponse(id, request.temporary)
+            )
+            call.respondText(responseBody, ContentType.Application.Json)
         }
         
         get("/{id}") {

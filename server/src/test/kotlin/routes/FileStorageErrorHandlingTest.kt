@@ -11,12 +11,14 @@ import org.junit.Assert.*
 import net.aabergs.configureCommonPlugins
 import net.aabergs.services.FileStorage
 import net.aabergs.services.UrlGenerator
+import net.aabergs.services.database.DatabaseService
 import java.io.File
 import java.nio.file.Files
 
 class FileStorageErrorHandlingTest {
     private lateinit var storage: FileStorage
     private lateinit var urlGenerator: UrlGenerator
+    private lateinit var databaseService: DatabaseService
     private val privateApiToken = "test-private-token"
     private val testDir = Files.createTempDirectory("fileserver-test").toString()
     private val baseUrl = "http://localhost:9000"
@@ -24,7 +26,7 @@ class FileStorageErrorHandlingTest {
     private fun Application.configurePrivateRoutesForTest() {
         configureCommonPlugins()
         routing {
-            privateRoutes(storage, urlGenerator, privateApiToken)
+            privateRoutes(storage, urlGenerator, databaseService, privateApiToken, DEFAULT_MAX_UPLOAD_BYTES, DEFAULT_TEMP_FILE_TTL_SECONDS, MAX_TEMP_FILE_TTL_SECONDS)
         }
     }
     
@@ -32,16 +34,18 @@ class FileStorageErrorHandlingTest {
     fun setup() {
         storage = FileStorage(testDir)
         // Use SQLite for tests with a temporary database
+        // Use shared cache to allow multiple connections to same in-memory database
         System.setProperty("DB_TYPE", "sqlite")
-        System.setProperty("DB_URL", "jdbc:sqlite::memory:")
+        System.setProperty("DB_URL", "jdbc:sqlite::memory:?shared_cache=true")
         
-        val databaseService = net.aabergs.services.database.DatabaseFactory.createDatabaseService()
+        databaseService = net.aabergs.services.database.DatabaseFactory.createDatabaseService()
         urlGenerator = UrlGenerator(baseUrl, databaseService)
     }
     
     @After
     fun cleanup() {
         urlGenerator.close()
+        databaseService.close()
         File(testDir).deleteRecursively()
         // Clear environment properties
         System.clearProperty("DB_TYPE")

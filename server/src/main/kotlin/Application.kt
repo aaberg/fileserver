@@ -16,12 +16,17 @@ import kotlinx.serialization.json.Json
 import net.aabergs.routes.privateRoutes
 import net.aabergs.routes.publicRoutes
 import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
+import net.aabergs.routes.DEFAULT_TEMP_FILE_TTL_SECONDS
+import net.aabergs.routes.MAX_TEMP_FILE_TTL_SECONDS
 import net.aabergs.models.ErrorResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
+import net.aabergs.services.database.DatabaseService
 import java.net.URI
+import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.seconds
 
 private data class ServerTimeouts(
     val shutdownGracePeriodMillis: Long,
@@ -132,10 +137,24 @@ fun startServers() {
     val privateApiToken = System.getenv("PRIVATE_API_TOKEN")?.takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("PRIVATE_API_TOKEN must be set")
     
+    val tempFileConfig = fileserverConfig.config("temporaryFiles")
+    val defaultTempFileTtlSeconds = tempFileConfig.propertyOrNull("defaultTtlSeconds")
+        ?.getString()?.toLong() ?: DEFAULT_TEMP_FILE_TTL_SECONDS
+    val maxTempFileTtlSeconds = tempFileConfig.propertyOrNull("maxTtlSeconds")
+        ?.getString()?.toLong() ?: MAX_TEMP_FILE_TTL_SECONDS
+    val runCleanupJob = System.getenv("FILESERVER_RUN_CLEANUP_JOB")?.toBoolean() ?: true
+    val cleanupIntervalSeconds = tempFileConfig.propertyOrNull("cleanupIntervalSeconds")
+        ?.getString()?.toLong() ?: 60L
+    
     // Initialize shared services
     val storage = FileStorage(storageDirectory)
     val databaseService = DatabaseFactory.createDatabaseService()
     val urlGenerator = UrlGenerator(publicBaseUrl, databaseService)
+    
+    // Start cleanup job for temporary files
+    if (runCleanupJob) {
+        startCleanupJob(databaseService, storage, cleanupIntervalSeconds.seconds)
+    }
 
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
@@ -144,7 +163,7 @@ fun startServers() {
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        configurePrivateServer(urlGenerator, storage, privateApiToken, maxUploadBytes)
+        configurePrivateServer(urlGenerator, storage, databaseService, privateApiToken, maxUploadBytes, defaultTempFileTtlSeconds, maxTempFileTtlSeconds)
     }
 
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -159,6 +178,7 @@ fun startServers() {
             )
         } finally {
             urlGenerator.close()
+            databaseService.close()
         }
     })
     
@@ -181,8 +201,11 @@ fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileS
 fun Application.configurePrivateServer(
     urlGenerator: UrlGenerator,
     storage: FileStorage,
+    databaseService: DatabaseService,
     privateApiToken: String,
-    maxUploadBytes: Long
+    maxUploadBytes: Long,
+    defaultTempFileTtlSeconds: Long,
+    maxTempFileTtlSeconds: Long
 ) {
     configureCommonPlugins()
 
@@ -190,6 +213,27 @@ fun Application.configurePrivateServer(
         get("/health") {
             call.respond(mapOf("status" to "ok"))
         }
-        privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
+        privateRoutes(storage, urlGenerator, databaseService, privateApiToken, maxUploadBytes, defaultTempFileTtlSeconds, maxTempFileTtlSeconds)
+    }
+}
+
+private fun startCleanupJob(databaseService: DatabaseService, storage: FileStorage, interval: kotlin.time.Duration) {
+    thread(isDaemon = true) {
+        while (true) {
+            try {
+                val expiredFileIds = databaseService.claimExpiredTemporaryFiles()
+                for (fileId in expiredFileIds) {
+                    try {
+                        storage.deleteFile(fileId)
+                        databaseService.removeTemporaryFile(fileId)
+                    } catch (e: Exception) {
+                        // File might already be deleted, that's okay
+                    }
+                }
+            } catch (e: Exception) {
+                // Log error but continue running
+            }
+            Thread.sleep(interval.inWholeMilliseconds)
+        }
     }
 }

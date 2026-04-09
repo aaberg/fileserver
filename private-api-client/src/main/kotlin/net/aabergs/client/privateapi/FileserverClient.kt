@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.aabergs.client.privateapi.dto.CreatePublicUrlRequest
 import net.aabergs.client.privateapi.dto.CreatePublicUrlResponse
+import net.aabergs.client.privateapi.dto.UpdateFileRequest
+import net.aabergs.client.privateapi.dto.UpdateFileResponse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -102,6 +104,45 @@ class FileserverClient(
             }
 
             return json.decodeFromString(CreatePublicUrlResponse.serializer(), responseBody).publicUrl
+        }
+    }
+
+    fun uploadTemporaryFile(id: String, content: ByteArray, ttlSeconds: Long? = null): Int {
+        val urlBuilder = url("file", id).newBuilder()
+        urlBuilder.addQueryParameter("temporary", "true")
+        ttlSeconds?.let { urlBuilder.addQueryParameter("ttl", it.toString()) }
+        
+        val request = Request.Builder()
+            .url(urlBuilder.build())
+            .put(content.toRequestBody("application/octet-stream".toMediaType()))
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            ensureSuccess(response)
+            return response.code
+        }
+    }
+
+    fun finalizeFile(id: String): UpdateFileResponse {
+        val payload = json.encodeToString(UpdateFileRequest(temporary = false))
+        val request = Request.Builder()
+            .url(url("file", id))
+            .patch(payload.toRequestBody("application/json".toMediaType()))
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw mapError(response.code, response.body?.string())
+            }
+
+            val responseBody = response.body?.string().orEmpty()
+            if (responseBody.isBlank()) {
+                throw FileserverClientException(response.code, "Missing response body")
+            }
+
+            return json.decodeFromString(UpdateFileResponse.serializer(), responseBody)
         }
     }
 

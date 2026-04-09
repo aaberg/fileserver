@@ -4,6 +4,10 @@ fileserver:
   publicBaseUrl: "http://localhost:9000"
   storageDirectory: "/tmp/fileserver"
   maxUploadBytes: 10485760
+  temporaryFiles:
+    defaultTtlSeconds: 43200
+    maxTtlSeconds: 86400
+    cleanupIntervalSeconds: 60
   timeouts:
     shutdownGracePeriodMillis: 5000
     shutdownTimeoutMillis: 15000

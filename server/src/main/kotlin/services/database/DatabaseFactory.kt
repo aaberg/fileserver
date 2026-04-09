@@ -39,6 +39,12 @@ class DatabaseFactory {
                         public_id TEXT PRIMARY KEY,
                         file_id TEXT NOT NULL,
                         expires_at BIGINT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS temporary_files (
+                        file_id TEXT PRIMARY KEY,
+                        created_at BIGINT NOT NULL,
+                        expires_at BIGINT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending'
                     )
                 """.trimIndent()
             )
@@ -54,6 +60,12 @@ class DatabaseFactory {
                         public_id VARCHAR(36) PRIMARY KEY,
                         file_id VARCHAR(255) NOT NULL,
                         expires_at BIGINT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS temporary_files (
+                        file_id VARCHAR(255) PRIMARY KEY,
+                        created_at BIGINT NOT NULL,
+                        expires_at BIGINT NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'pending'
                     )
                 """.trimIndent()
             )
