@@ -26,7 +26,7 @@ class JdbcServiceTest {
             tableSchema = """
                 CREATE TABLE IF NOT EXISTS public_urls (
                     public_id TEXT PRIMARY KEY,
-                    file_id TEXT NOT NULL,
+                    file_ref TEXT NOT NULL,
                     expires_at BIGINT NOT NULL
                 )
             """.trimIndent()
@@ -42,7 +42,7 @@ class JdbcServiceTest {
         jdbcService.insertPublicUrl("test-id", "test-file", System.currentTimeMillis() + 3600000)
         val result = jdbcService.getPublicUrlInfo("test-id")
         assertNotNull(result)
-        assertEquals("test-file", result!!.fileId)
+        assertEquals("test-file", result!!.fileRef)
         
         // Test cleanup
         jdbcService.cleanupExpired()
@@ -65,7 +65,7 @@ class JdbcServiceTest {
         databaseService.insertPublicUrl(uniqueId, "factory-file", System.currentTimeMillis() + 3600000)
         val result = databaseService.getPublicUrlInfo(uniqueId)
         assertNotNull(result)
-        assertEquals("factory-file", result!!.fileId)
+        assertEquals("factory-file", result!!.fileRef)
         
         databaseService.close()
     }
@@ -77,12 +77,12 @@ class JdbcServiceTest {
             JdbcConfig(
                 dbUrl = "jdbc:sqlite::memory:",
                 driverClass = "org.sqlite.JDBC",
-                tableSchema = "CREATE TABLE IF NOT EXISTS public_urls (public_id TEXT PRIMARY KEY, file_id TEXT NOT NULL, expires_at BIGINT NOT NULL)"
+                tableSchema = "CREATE TABLE IF NOT EXISTS public_urls (public_id TEXT PRIMARY KEY, file_ref TEXT NOT NULL, expires_at BIGINT NOT NULL)"
             ),
             JdbcConfig(
                 dbUrl = "jdbc:h2:mem:test",
                 driverClass = "org.h2.Driver",
-                tableSchema = "CREATE TABLE IF NOT EXISTS public_urls (public_id VARCHAR(36) PRIMARY KEY, file_id VARCHAR(255) NOT NULL, expires_at BIGINT NOT NULL)"
+                tableSchema = "CREATE TABLE IF NOT EXISTS public_urls (public_id VARCHAR(36) PRIMARY KEY, file_ref VARCHAR(255) NOT NULL, expires_at BIGINT NOT NULL)"
             )
         )
         

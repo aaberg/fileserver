@@ -34,7 +34,7 @@ fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage, tempora
             return@get
         }
 
-        val fileRef = urlGenerator.parseReference(urlInfo.fileId)
+        val fileRef = urlGenerator.parseReference(urlInfo.fileRef)
         val filePath = when (fileRef.type) {
             FileReferenceType.PERMANENT -> storage.getFilePath(fileRef.id)
             FileReferenceType.TEMPORARY -> temporaryStorage.getTemporaryFilePathIfValid(fileRef.id, now)

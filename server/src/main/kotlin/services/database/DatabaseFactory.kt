@@ -37,7 +37,7 @@ class DatabaseFactory {
                 tableSchema = """
                     CREATE TABLE IF NOT EXISTS public_urls (
                         public_id TEXT PRIMARY KEY,
-                        file_id TEXT NOT NULL,
+                        file_ref TEXT NOT NULL,
                         expires_at BIGINT NOT NULL
                     )
                 """.trimIndent()
@@ -52,7 +52,7 @@ class DatabaseFactory {
                 tableSchema = """
                     CREATE TABLE IF NOT EXISTS public_urls (
                         public_id VARCHAR(36) PRIMARY KEY,
-                        file_id VARCHAR(255) NOT NULL,
+                        file_ref VARCHAR(255) NOT NULL,
                         expires_at BIGINT NOT NULL
                     )
                 """.trimIndent()

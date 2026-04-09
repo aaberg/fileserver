@@ -4,7 +4,7 @@ import net.aabergs.services.PublicUrlInfo
 
 interface DatabaseService {
     fun initialize()
-    fun insertPublicUrl(publicId: String, fileId: String, expiresAt: Long)
+    fun insertPublicUrl(publicId: String, fileRef: String, expiresAt: Long)
     fun getPublicUrlInfo(publicId: String): PublicUrlInfo?
     fun updateFileReferences(oldFileRef: String, newFileRef: String)
     fun cleanupExpired()

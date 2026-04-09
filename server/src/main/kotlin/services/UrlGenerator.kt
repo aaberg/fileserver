@@ -3,7 +3,7 @@ package net.aabergs.services
 import net.aabergs.services.database.DatabaseService
 import java.util.*
 
-data class PublicUrlInfo(val fileId: String, val expiresAt: Long)
+data class PublicUrlInfo(val fileRef: String, val expiresAt: Long)
 data class GeneratedPublicUrl(val url: String, val expiresAt: Long)
 data class FileReference(val type: FileReferenceType, val id: String)
 enum class FileReferenceType { PERMANENT, TEMPORARY }
@@ -52,7 +52,7 @@ class UrlGenerator(private val baseUrl: String, private val databaseService: Dat
     
     fun getFileIdForPublicId(publicId: String): String? {
         val info = databaseService.getPublicUrlInfo(publicId) ?: return null
-        val ref = parseReference(info.fileId)
+        val ref = parseReference(info.fileRef)
         return if (ref.type == FileReferenceType.PERMANENT) ref.id else null
     }
 
