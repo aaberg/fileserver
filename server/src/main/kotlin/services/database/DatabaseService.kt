@@ -6,6 +6,7 @@ interface DatabaseService {
     fun initialize()
     fun insertPublicUrl(publicId: String, fileId: String, expiresAt: Long)
     fun getPublicUrlInfo(publicId: String): PublicUrlInfo?
+    fun updateFileReferences(oldFileRef: String, newFileRef: String)
     fun cleanupExpired()
     fun close()
 }

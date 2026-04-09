@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.aabergs.client.privateapi.dto.CreatePublicUrlRequest
 import net.aabergs.client.privateapi.dto.CreatePublicUrlResponse
+import net.aabergs.client.privateapi.dto.TemporaryFileUploadResponse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -84,9 +85,62 @@ class FileserverClient(
     }
 
     fun createPublicUrl(id: String, durationMinutes: Long): String {
+        return createPublicUrlInternal(durationMinutes, "file", id, "public-url")
+    }
+
+    fun uploadTemporaryFile(content: ByteArray): TemporaryFileUploadResponse {
+        val request = Request.Builder()
+            .url(url("temp-file"))
+            .post(content.toRequestBody("application/octet-stream".toMediaType()))
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw mapError(response.code, response.body?.string())
+            }
+
+            val responseBody = response.body?.string().orEmpty()
+            if (responseBody.isBlank()) {
+                throw FileserverClientException(response.code, "Missing response body")
+            }
+
+            return json.decodeFromString(TemporaryFileUploadResponse.serializer(), responseBody)
+        }
+    }
+
+    fun deleteTemporaryFile(tempFileId: String) {
+        val request = Request.Builder()
+            .url(url("temp-file", tempFileId))
+            .delete()
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            ensureSuccess(response)
+        }
+    }
+
+    fun promoteTemporaryFile(tempFileId: String, fileId: String) {
+        val request = Request.Builder()
+            .url(url("temp-file", tempFileId, "promote", fileId))
+            .post(ByteArray(0).toRequestBody(null))
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            ensureSuccess(response)
+        }
+    }
+
+    fun createPublicUrlForTemporaryFile(tempFileId: String, durationMinutes: Long): String {
+        return createPublicUrlInternal(durationMinutes, "temp-file", tempFileId, "public-url")
+    }
+
+    private fun createPublicUrlInternal(durationMinutes: Long, vararg pathSegments: String): String {
         val payload = json.encodeToString(CreatePublicUrlRequest(durationMinutes))
         val request = Request.Builder()
-            .url(url("file", id, "public-url"))
+            .url(url(*pathSegments))
             .post(payload.toRequestBody("application/json".toMediaType()))
             .authorized()
             .build()

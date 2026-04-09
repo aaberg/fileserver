@@ -125,4 +125,133 @@ class ApplicationConfigTest {
             )
         }
     }
+
+    @Test
+    fun `uses cleanup defaults when no override is set`() {
+        val config = MapApplicationConfig().config("fileserver")
+
+        val resolved = resolveCleanupConfig(
+            fileserverConfig = config,
+            propertyLookup = { null },
+            envLookup = { null }
+        )
+
+        assertEquals(false, resolved.enabled)
+        assertEquals(300L, resolved.intervalSeconds)
+    }
+
+    @Test
+    fun `uses cleanup property overrides`() {
+        val config = MapApplicationConfig(
+            "fileserver.cleanup.enabled" to "false",
+            "fileserver.cleanup.intervalSeconds" to "600"
+        ).config("fileserver")
+
+        val resolved = resolveCleanupConfig(
+            fileserverConfig = config,
+            propertyLookup = { key ->
+                when (key) {
+                    "FILESERVER_CLEANUP_ENABLED" -> "true"
+                    "FILESERVER_CLEANUP_INTERVAL_SECONDS" -> "120"
+                    else -> null
+                }
+            },
+            envLookup = { null }
+        )
+
+        assertEquals(true, resolved.enabled)
+        assertEquals(120L, resolved.intervalSeconds)
+    }
+
+    @Test
+    fun `uses cleanup env overrides when property is not set`() {
+        val config = MapApplicationConfig(
+            "fileserver.cleanup.enabled" to "false",
+            "fileserver.cleanup.intervalSeconds" to "600"
+        ).config("fileserver")
+
+        val resolved = resolveCleanupConfig(
+            fileserverConfig = config,
+            propertyLookup = { null },
+            envLookup = { key ->
+                when (key) {
+                    "FILESERVER_CLEANUP_ENABLED" -> "true"
+                    "FILESERVER_CLEANUP_INTERVAL_SECONDS" -> "180"
+                    else -> null
+                }
+            }
+        )
+
+        assertEquals(true, resolved.enabled)
+        assertEquals(180L, resolved.intervalSeconds)
+    }
+
+    @Test
+    fun `throws on invalid cleanup enabled value`() {
+        val config = MapApplicationConfig(
+            "fileserver.cleanup.enabled" to "not-bool"
+        ).config("fileserver")
+
+        assertFailsWith<IllegalStateException> {
+            resolveCleanupConfig(
+                fileserverConfig = config,
+                propertyLookup = { null },
+                envLookup = { null }
+            )
+        }
+    }
+
+    @Test
+    fun `throws on invalid cleanup interval`() {
+        val config = MapApplicationConfig(
+            "fileserver.cleanup.intervalSeconds" to "0"
+        ).config("fileserver")
+
+        assertFailsWith<IllegalStateException> {
+            resolveCleanupConfig(
+                fileserverConfig = config,
+                propertyLookup = { null },
+                envLookup = { null }
+            )
+        }
+    }
+
+    @Test
+    fun `uses temp defaults when no override is set`() {
+        val config = MapApplicationConfig().config("fileserver")
+
+        val resolved = resolveTempFilesConfig(
+            fileserverConfig = config,
+            defaultMaxUploadBytes = 10_485_760,
+            propertyLookup = { null },
+            envLookup = { null }
+        )
+
+        assertEquals(3600L, resolved.ttlSeconds)
+        assertEquals(10_485_760L, resolved.maxUploadBytes)
+    }
+
+    @Test
+    fun `uses temp property overrides`() {
+        val config = MapApplicationConfig(
+            "fileserver.temp.ttlSeconds" to "600",
+            "fileserver.temp.maxUploadBytes" to "2048"
+        ).config("fileserver")
+
+        val resolved = resolveTempFilesConfig(
+            fileserverConfig = config,
+            defaultMaxUploadBytes = 10_485_760,
+            propertyLookup = { key ->
+                when (key) {
+                    "FILESERVER_TEMP_TTL_SECONDS" -> "120"
+                    "FILESERVER_TEMP_MAX_UPLOAD_BYTES" -> "1024"
+                    else -> null
+                }
+            },
+            envLookup = { null }
+        )
+
+        assertEquals(120L, resolved.ttlSeconds)
+        assertEquals(1024L, resolved.maxUploadBytes)
+    }
 }

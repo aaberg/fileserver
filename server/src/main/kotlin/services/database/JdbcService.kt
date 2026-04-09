@@ -79,6 +79,18 @@ class JdbcService(private val config: JdbcConfig) : DatabaseService {
         return null
     }
 
+    override fun updateFileReferences(oldFileRef: String, newFileRef: String) {
+        val sql = "UPDATE public_urls SET file_id = ? WHERE file_id = ?"
+
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, newFileRef)
+                stmt.setString(2, oldFileRef)
+                stmt.executeUpdate()
+            }
+        }
+    }
+
     override fun cleanupExpired() {
         val sql = "DELETE FROM public_urls WHERE expires_at < ?"
         val now = System.currentTimeMillis()

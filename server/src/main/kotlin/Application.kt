@@ -19,13 +19,27 @@ import net.aabergs.routes.DEFAULT_MAX_UPLOAD_BYTES
 import net.aabergs.models.ErrorResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
+import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
 import net.aabergs.services.database.DatabaseFactory
 import java.net.URI
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 private data class ServerTimeouts(
     val shutdownGracePeriodMillis: Long,
     val shutdownTimeoutMillis: Long
+)
+
+internal data class CleanupConfig(
+    val enabled: Boolean,
+    val intervalSeconds: Long
+)
+
+internal data class TempFilesConfig(
+    val ttlSeconds: Long,
+    val maxUploadBytes: Long
 )
 
 private val ERROR_RESPONSE_JSON = Json
@@ -85,6 +99,100 @@ internal fun resolveStorageDirectory(
     return normalized
 }
 
+internal fun resolveCleanupConfig(
+    fileserverConfig: ApplicationConfig,
+    propertyLookup: (String) -> String? = System::getProperty,
+    envLookup: (String) -> String? = System::getenv
+): CleanupConfig {
+    fun parseBoolean(value: String): Boolean {
+        return when (value.lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> throw IllegalStateException("Invalid cleanup enabled value: $value")
+        }
+    }
+
+    val enabled = propertyLookup("FILESERVER_CLEANUP_ENABLED")?.takeIf { it.isNotBlank() }
+        ?.let(::parseBoolean)
+        ?: envLookup("FILESERVER_CLEANUP_ENABLED")?.takeIf { it.isNotBlank() }
+            ?.let(::parseBoolean)
+        ?: fileserverConfig.propertyOrNull("cleanup.enabled")?.getString()?.let(::parseBoolean)
+        ?: false
+
+    val intervalSeconds = propertyLookup("FILESERVER_CLEANUP_INTERVAL_SECONDS")?.takeIf { it.isNotBlank() }
+        ?.toLongOrNull()
+        ?: envLookup("FILESERVER_CLEANUP_INTERVAL_SECONDS")?.takeIf { it.isNotBlank() }
+            ?.toLongOrNull()
+        ?: fileserverConfig.propertyOrNull("cleanup.intervalSeconds")?.getString()?.toLongOrNull()
+        ?: 300L
+
+    if (intervalSeconds <= 0) {
+        throw IllegalStateException("Cleanup interval must be greater than zero")
+    }
+
+    return CleanupConfig(enabled, intervalSeconds)
+}
+
+internal fun resolveTempFilesConfig(
+    fileserverConfig: ApplicationConfig,
+    defaultMaxUploadBytes: Long,
+    propertyLookup: (String) -> String? = System::getProperty,
+    envLookup: (String) -> String? = System::getenv
+): TempFilesConfig {
+    val ttlSeconds = propertyLookup("FILESERVER_TEMP_TTL_SECONDS")?.takeIf { it.isNotBlank() }
+        ?.toLongOrNull()
+        ?: envLookup("FILESERVER_TEMP_TTL_SECONDS")?.takeIf { it.isNotBlank() }
+            ?.toLongOrNull()
+        ?: fileserverConfig.propertyOrNull("temp.ttlSeconds")?.getString()?.toLongOrNull()
+        ?: 3600L
+
+    val maxUploadBytes = propertyLookup("FILESERVER_TEMP_MAX_UPLOAD_BYTES")?.takeIf { it.isNotBlank() }
+        ?.toLongOrNull()
+        ?: envLookup("FILESERVER_TEMP_MAX_UPLOAD_BYTES")?.takeIf { it.isNotBlank() }
+            ?.toLongOrNull()
+        ?: fileserverConfig.propertyOrNull("temp.maxUploadBytes")?.getString()?.toLongOrNull()
+        ?: defaultMaxUploadBytes
+
+    if (ttlSeconds <= 0) {
+        throw IllegalStateException("Temporary file TTL must be greater than zero")
+    }
+    if (maxUploadBytes <= 0) {
+        throw IllegalStateException("Temporary file max upload size must be greater than zero")
+    }
+
+    return TempFilesConfig(ttlSeconds, maxUploadBytes)
+}
+
+private fun startCleanupSchedulerIfEnabled(
+    cleanupConfig: CleanupConfig,
+    urlGenerator: UrlGenerator,
+    temporaryStorage: TemporaryFileStorage
+): ScheduledExecutorService? {
+    if (!cleanupConfig.enabled) {
+        return null
+    }
+
+    val scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "fileserver-cleanup").apply { isDaemon = true }
+    }
+
+    scheduler.scheduleAtFixedRate(
+        {
+            try {
+                urlGenerator.cleanupExpired()
+                temporaryStorage.cleanupExpiredTemporaryFiles()
+            } catch (e: Exception) {
+                System.err.println("Cleanup job failed: ${e.message}")
+            }
+        },
+        cleanupConfig.intervalSeconds,
+        cleanupConfig.intervalSeconds,
+        TimeUnit.SECONDS
+    )
+
+    return scheduler
+}
+
 fun Application.configureCommonPlugins() {
     install(ContentNegotiation) {
         json()
@@ -120,8 +228,10 @@ fun startServers() {
     val privatePort = fileserverConfig.property("privatePort").getString().toInt()
     val publicBaseUrl = resolvePublicBaseUrl(fileserverConfig)
     val storageDirectory = resolveStorageDirectory(fileserverConfig)
+    val cleanupConfig = resolveCleanupConfig(fileserverConfig)
     val maxUploadBytes = fileserverConfig.propertyOrNull("maxUploadBytes")?.getString()?.toLong()
         ?: DEFAULT_MAX_UPLOAD_BYTES
+    val tempFilesConfig = resolveTempFilesConfig(fileserverConfig, maxUploadBytes)
     val timeoutsConfig = fileserverConfig.config("timeouts")
     val serverTimeouts = ServerTimeouts(
         shutdownGracePeriodMillis = timeoutsConfig.propertyOrNull("shutdownGracePeriodMillis")
@@ -134,17 +244,27 @@ fun startServers() {
     
     // Initialize shared services
     val storage = FileStorage(storageDirectory)
+    val temporaryStorage = TemporaryFileStorage(storageDirectory)
     val databaseService = DatabaseFactory.createDatabaseService()
     val urlGenerator = UrlGenerator(publicBaseUrl, databaseService)
+    val cleanupScheduler = startCleanupSchedulerIfEnabled(cleanupConfig, urlGenerator, temporaryStorage)
 
     // Start public server (port 9000)
     val publicServer = embeddedServer(CIO, port = publicPort) {
-        configurePublicServer(urlGenerator, storage)
+        configurePublicServer(urlGenerator, storage, temporaryStorage)
     }
     
     // Start private server (port 9001)  
     val privateServer = embeddedServer(CIO, port = privatePort) {
-        configurePrivateServer(urlGenerator, storage, privateApiToken, maxUploadBytes)
+        configurePrivateServer(
+            urlGenerator,
+            storage,
+            temporaryStorage,
+            privateApiToken,
+            maxUploadBytes,
+            tempFilesConfig.maxUploadBytes,
+            tempFilesConfig.ttlSeconds
+        )
     }
 
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -158,6 +278,8 @@ fun startServers() {
                 serverTimeouts.shutdownTimeoutMillis
             )
         } finally {
+            cleanupScheduler?.shutdownNow()
+            cleanupScheduler?.awaitTermination(5, TimeUnit.SECONDS)
             urlGenerator.close()
         }
     })
@@ -167,22 +289,10 @@ fun startServers() {
     privateServer.start(wait = true)
 }
 
-fun Application.configurePublicServer(urlGenerator: UrlGenerator, storage: FileStorage) {
-    configureCommonPlugins()
-
-    routing {
-        get("/health") {
-            call.respond(mapOf("status" to "ok"))
-        }
-        publicRoutes(urlGenerator, storage)
-    }
-}
-
-fun Application.configurePrivateServer(
+fun Application.configurePublicServer(
     urlGenerator: UrlGenerator,
     storage: FileStorage,
-    privateApiToken: String,
-    maxUploadBytes: Long
+    temporaryStorage: TemporaryFileStorage
 ) {
     configureCommonPlugins()
 
@@ -190,6 +300,33 @@ fun Application.configurePrivateServer(
         get("/health") {
             call.respond(mapOf("status" to "ok"))
         }
-        privateRoutes(storage, urlGenerator, privateApiToken, maxUploadBytes)
+        publicRoutes(urlGenerator, storage, temporaryStorage)
+    }
+}
+
+fun Application.configurePrivateServer(
+    urlGenerator: UrlGenerator,
+    storage: FileStorage,
+    temporaryStorage: TemporaryFileStorage,
+    privateApiToken: String,
+    maxUploadBytes: Long,
+    tempUploadMaxBytes: Long,
+    tempTtlSeconds: Long
+) {
+    configureCommonPlugins()
+
+    routing {
+        get("/health") {
+            call.respond(mapOf("status" to "ok"))
+        }
+        privateRoutes(
+            storage,
+            temporaryStorage,
+            urlGenerator,
+            privateApiToken,
+            maxUploadBytes,
+            tempUploadMaxBytes,
+            tempTtlSeconds
+        )
     }
 }

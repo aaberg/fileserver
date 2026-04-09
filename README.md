@@ -80,6 +80,28 @@ curl -X DELETE \
   http://localhost:9001/file/example.txt
 ```
 
+Temporary file flow:
+
+```bash
+# Upload temporary file
+curl -X POST \
+  -H "Authorization: Bearer dev-token" \
+  --data-binary "draft-content" \
+  http://localhost:9001/temp-file
+
+# Create public URL for temp file
+curl -X POST \
+  -H "Authorization: Bearer dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"duration": 5}' \
+  http://localhost:9001/temp-file/<tempFileId>/public-url
+
+# Promote temp file to permanent id
+curl -X POST \
+  -H "Authorization: Bearer dev-token" \
+  http://localhost:9001/temp-file/<tempFileId>/promote/final-file.txt
+```
+
 ## Health Endpoints
 
 - Public health: `GET http://localhost:9000/health`
@@ -98,6 +120,10 @@ Environment variables / overrides:
 - `PRIVATE_API_TOKEN` (required): bearer token required for `http://<host>:9001/file/*`.
 - `FILESERVER_PUBLIC_BASE_URL` (optional): external base URL for generated public links (for example `https://files.example.com`). Falls back to `fileserver.publicBaseUrl` in `server/src/main/resources/application.yaml`.
 - `FILESERVER_STORAGE_DIRECTORY` (optional): storage path for uploaded files. In the Docker image this defaults to `/data/files`. Outside Docker, it falls back to `fileserver.storageDirectory` in `server/src/main/resources/application.yaml`.
+- `FILESERVER_CLEANUP_ENABLED` (optional): enables periodic cleanup of expired public URLs in the app process. Default is `false`.
+- `FILESERVER_CLEANUP_INTERVAL_SECONDS` (optional): cleanup interval in seconds when cleanup is enabled. Default is `300`.
+- `FILESERVER_TEMP_TTL_SECONDS` (optional): default temporary file lifetime in seconds. Default is `3600`.
+- `FILESERVER_TEMP_MAX_UPLOAD_BYTES` (optional): max upload bytes for temporary file uploads. Default is `fileserver.maxUploadBytes`.
 - `DB_TYPE`: `sqlite` (default) or `postgres`.
 - `DB_URL`: JDBC URL. Defaults to SQLite local file DB.
 - `DB_USER` and `DB_PASSWORD`: required for PostgreSQL.
@@ -105,6 +131,10 @@ Environment variables / overrides:
 App config defaults (`server/src/main/resources/application.yaml`):
 
 - `fileserver.maxUploadBytes` default: `10485760` (10 MiB)
+- `fileserver.temp.ttlSeconds` default: `3600`
+- `fileserver.temp.maxUploadBytes` default: `10485760`
+- `fileserver.cleanup.enabled` default: `false`
+- `fileserver.cleanup.intervalSeconds` default: `300`
 - `fileserver.timeouts.shutdownGracePeriodMillis` default: `5000`
 - `fileserver.timeouts.shutdownTimeoutMillis` default: `15000`
 
@@ -147,3 +177,4 @@ Manual endpoint verification resources:
 - Ensure `FILESERVER_PUBLIC_BASE_URL` matches the externally reachable URL.
 - Use persistent volumes for file storage.
 - Restrict access to the private API port (`9001`) to trusted callers only.
+- In multi-instance deployments, keep in-process cleanup disabled and run cleanup from a single dedicated worker/CronJob.
