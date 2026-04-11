@@ -55,7 +55,7 @@ class PublicRoutesTest {
         // Store a test file
         val fileId = "test-file"
         val fileContent = "Hello, World!".toByteArray()
-        storage.storeFile(fileId, fileContent)
+        storage.storeFile(fileId, fileContent, "image/png")
         
         // Generate a public URL
         val publicUrl = urlGenerator.generatePublicUrl(fileId, 60)
@@ -66,6 +66,7 @@ class PublicRoutesTest {
         
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Hello, World!", response.bodyAsText())
+        assertEquals("image/png", response.headers[HttpHeaders.ContentType])
         val cacheControl = requireNotNull(response.headers[HttpHeaders.CacheControl])
         assertTrue(cacheControl.contains("public"))
         assertTrue(cacheControl.contains("must-revalidate"))
@@ -88,7 +89,7 @@ class PublicRoutesTest {
         // Store a test file
         val fileId = "test-file"
         val fileContent = "Hello, World!".toByteArray()
-        storage.storeFile(fileId, fileContent)
+        storage.storeFile(fileId, fileContent, "image/png")
         
         // Generate an expired public URL
         val publicUrl = urlGenerator.generatePublicUrl(fileId, 0) // Expire immediately
@@ -139,7 +140,8 @@ class PublicRoutesTest {
         val tempInfo = temporaryStorage.storeTemporaryFromStream(
             "tmp-content".byteInputStream(),
             maxUploadBytes = 1024,
-            ttlSeconds = 300
+            ttlSeconds = 300,
+            contentType = "image/jpeg"
         )
         val publicUrl = urlGenerator.generateTemporaryPublicUrl(tempInfo.tempFileId, 5).url
         val publicId = publicUrl.substringAfterLast("/")
@@ -148,5 +150,6 @@ class PublicRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("tmp-content", response.bodyAsText())
+        assertEquals("image/jpeg", response.headers[HttpHeaders.ContentType])
     }
 }

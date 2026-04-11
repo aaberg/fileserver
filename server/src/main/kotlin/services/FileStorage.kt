@@ -1,5 +1,6 @@
 package net.aabergs.services
 
+import io.ktor.http.ContentType
 import java.io.File
 import java.io.InputStream
 import java.io.IOException
@@ -29,20 +30,39 @@ class FileStorage(private val storageDirectory: String) {
         return resolved
     }
     
-    fun storeFile(id: String, content: ByteArray) {
+    fun storeFile(id: String, content: ByteArray, contentType: String = ContentType.Application.OctetStream.toString()) {
         val filePath = resolveSafePath(id)
-        Files.write(
-            filePath,
-            content,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE
-        )
+        try {
+            Files.write(
+                filePath,
+                content,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE
+            )
+            FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        } catch (e: Exception) {
+            Files.deleteIfExists(filePath)
+            FileMetadataStore.delete(filePath)
+            throw e
+        }
     }
 
-    fun storeFileFromStream(id: String, input: InputStream, maxUploadBytes: Long) {
+    fun storeFileFromStream(
+        id: String,
+        input: InputStream,
+        maxUploadBytes: Long,
+        contentType: String = ContentType.Application.OctetStream.toString()
+    ) {
         val filePath = resolveSafePath(id)
-        StreamFileWriter.writeStreamAtomically(storagePath, filePath, input, maxUploadBytes)
+        try {
+            StreamFileWriter.writeStreamAtomically(storagePath, filePath, input, maxUploadBytes)
+            FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        } catch (e: Exception) {
+            Files.deleteIfExists(filePath)
+            FileMetadataStore.delete(filePath)
+            throw e
+        }
     }
     
     fun getFile(id: String): ByteArray? {
@@ -62,16 +82,26 @@ class FileStorage(private val storageDirectory: String) {
             null
         }
     }
+
+    fun getStoredFileInfo(id: String): StoredFileInfo? {
+        val filePath = getFilePath(id) ?: return null
+        return StoredFileInfo(filePath, FileMetadataStore.metadataContentType(filePath))
+    }
     
     fun deleteFile(id: String) {
         val filePath = resolveSafePath(id)
         if (!Files.deleteIfExists(filePath) && Files.exists(filePath)) {
             throw IOException("Failed to delete file: $filePath")
         }
+        FileMetadataStore.delete(filePath)
     }
 
     fun getDestinationPath(id: String): Path {
         return resolveSafePath(id)
+    }
+
+    fun writeMetadataForPath(filePath: Path, contentType: String) {
+        FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
     }
 }
 

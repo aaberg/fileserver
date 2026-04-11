@@ -29,11 +29,12 @@ class TemporaryFileStorageTest {
 
     @Test
     fun storeAndReadTemporaryFile() {
-        val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
+        val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300, "image/png")
         val path = temporaryStorage.getTemporaryFilePathIfValid(info.tempFileId)
 
         assertNotNull(path)
         assertEquals("content", Files.readString(path))
+        assertEquals("image/png", temporaryStorage.getTemporaryFileInfo(info.tempFileId)?.contentType)
     }
 
     @Test
@@ -50,7 +51,7 @@ class TemporaryFileStorageTest {
     @Test
     fun cleanupDeletesOrphanTemporaryFileWithoutMeta() {
         val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
-        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta")
+        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta.json")
         Files.deleteIfExists(metaPath)
 
         temporaryStorage.cleanupExpiredTemporaryFiles()
@@ -61,7 +62,7 @@ class TemporaryFileStorageTest {
     @Test
     fun cleanupDeletesMetaWhenFileIsMissing() {
         val info = temporaryStorage.storeTemporaryFromStream("content".byteInputStream(), 1024, 300)
-        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta")
+        val metaPath = info.filePath.resolveSibling("${info.tempFileId}.meta.json")
         Files.deleteIfExists(info.filePath)
 
         temporaryStorage.cleanupExpiredTemporaryFiles()

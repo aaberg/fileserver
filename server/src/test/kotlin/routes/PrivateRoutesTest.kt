@@ -70,6 +70,7 @@ class PrivateRoutesTest {
         
         val response = client.put("/file/$fileId") {
             withAuth()
+            contentType(ContentType.Image.PNG)
             setBody(fileContent)
         }
         
@@ -100,6 +101,7 @@ class PrivateRoutesTest {
         
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Hello, World!", response.bodyAsText())
+        assertEquals("application/octet-stream", response.headers[HttpHeaders.ContentType])
     }
     
     @Test
@@ -210,6 +212,7 @@ class PrivateRoutesTest {
 
         val putResponse = client.put("/file/$fileId") {
             withAuth()
+            contentType(ContentType.Image.PNG)
             setBody(content)
         }
         val getResponse = client.get("/file/$fileId") {
@@ -219,6 +222,7 @@ class PrivateRoutesTest {
         assertEquals(HttpStatusCode.OK, putResponse.status)
         assertEquals(HttpStatusCode.OK, getResponse.status)
         assertEquals("Hello with extension", getResponse.bodyAsText())
+        assertEquals("image/png", getResponse.headers[HttpHeaders.ContentType])
     }
 
     @Test
@@ -291,6 +295,7 @@ class PrivateRoutesTest {
 
         val uploadResponse = client.post("/temp-file") {
             withAuth()
+            contentType(ContentType.Image.PNG)
             setBody("temporary-content".toByteArray())
         }
         assertEquals(HttpStatusCode.OK, uploadResponse.status)
@@ -304,6 +309,7 @@ class PrivateRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, promoteResponse.status)
         assertEquals("temporary-content", storage.getFile("promoted.txt")?.toString(Charsets.UTF_8))
+        assertEquals("image/png", storage.getStoredFileInfo("promoted.txt")?.contentType)
     }
 
     @Test

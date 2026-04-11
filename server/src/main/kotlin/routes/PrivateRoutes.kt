@@ -22,6 +22,16 @@ import java.security.MessageDigest
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
 private val ROUTE_JSON = Json
+private val DEFAULT_DOWNLOAD_CONTENT_TYPE = ContentType.Application.OctetStream
+
+private fun ApplicationRequest.uploadContentTypeHeader(): String {
+    val contentType = contentType().withoutParameters()
+    return if (contentType == ContentType.Any || contentType.toString().isBlank()) {
+        ContentType.Application.OctetStream.toString()
+    } else {
+        contentType.toString()
+    }
+}
 
 private fun ApplicationCall.requireValidFileId(): String {
     val id = parameters["id"] ?: throw BadRequestException("Missing id")
@@ -78,7 +88,7 @@ fun Route.privateRoutes(
                 }
             }
             val id = call.requireValidFileId()
-            storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes)
+            storage.storeFileFromStream(id, call.receiveStream(), maxUploadBytes, call.request.uploadContentTypeHeader())
             call.respond(HttpStatusCode.OK)
         }
         
@@ -87,15 +97,15 @@ fun Route.privateRoutes(
                 return@get
             }
             val id = call.requireValidFileId()
-            val filePath = storage.getFilePath(id)
-            if (filePath != null) {
-                val file = filePath.toFile()
+            val storedFile = storage.getStoredFileInfo(id)
+            if (storedFile != null) {
+                val file = storedFile.filePath.toFile()
                 call.response.header(
                     HttpHeaders.ContentDisposition,
                     ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString()
                 )
                 call.response.header("X-Content-Type-Options", "nosniff")
-                call.respondOutputStream(ContentType.Application.OctetStream) {
+                call.respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
                     file.inputStream().use { input -> input.copyTo(this) }
                 }
             } else {
@@ -140,7 +150,12 @@ fun Route.privateRoutes(
                 }
             }
 
-            val info = temporaryStorage.storeTemporaryFromStream(call.receiveStream(), tempUploadMaxBytes, tempTtlSeconds)
+            val info = temporaryStorage.storeTemporaryFromStream(
+                call.receiveStream(),
+                tempUploadMaxBytes,
+                tempTtlSeconds,
+                call.request.uploadContentTypeHeader()
+            )
             val response = TemporaryFileUploadResponse(info.tempFileId, info.expiresAt)
             call.respondText(ROUTE_JSON.encodeToString(TemporaryFileUploadResponse.serializer(), response), ContentType.Application.Json)
         }
@@ -163,7 +178,8 @@ fun Route.privateRoutes(
 
             val destinationPath = storage.getDestinationPath(id)
             try {
-                temporaryStorage.promoteTemporaryFile(tempFileId, destinationPath)
+                val tempInfo = temporaryStorage.promoteTemporaryFile(tempFileId, destinationPath)
+                storage.writeMetadataForPath(destinationPath, tempInfo.contentType)
             } catch (_: IllegalArgumentException) {
                 call.respond(HttpStatusCode.NotFound, "Temporary file not found")
                 return@post

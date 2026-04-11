@@ -4,6 +4,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.config.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.request.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.routing.*
 import io.ktor.server.cio.*
@@ -200,16 +201,34 @@ fun Application.configureCommonPlugins() {
 
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
+            call.application.log.warn(
+                "400 Bad Request: {} - {} ({})",
+                call.request.local.method,
+                call.request.uri,
+                cause.message ?: "Bad request"
+            )
             call.respondJsonError(HttpStatusCode.BadRequest, "bad_request", cause.message ?: "Bad request")
         }
         exception<PayloadTooLargeException> { call, cause ->
+            call.application.log.warn(
+                "413 Payload Too Large: {} - {} ({})",
+                call.request.local.method,
+                call.request.uri,
+                cause.message ?: "Payload too large"
+            )
             call.respondJsonError(
                 HttpStatusCode.PayloadTooLarge,
                 "payload_too_large",
                 cause.message ?: "Payload too large"
             )
         }
-        exception<Throwable> { call, _ ->
+        exception<Throwable> { call, cause ->
+            call.application.log.error(
+                "Unhandled server error: {} - {}",
+                call.request.local.method,
+                call.request.uri,
+                cause
+            )
             call.respondJsonError(HttpStatusCode.InternalServerError, "internal_error", "Internal server error")
         }
     }
