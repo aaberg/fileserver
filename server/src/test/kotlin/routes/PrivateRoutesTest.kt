@@ -334,4 +334,82 @@ class PrivateRoutesTest {
         assertEquals(HttpStatusCode.OK, publicUrlResponse.status)
         assertTrue(publicUrlResponse.bodyAsText().contains("\"publicUrl\":"))
     }
+
+    @Test
+    fun testGetTemporaryFile() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val uploadResponse = client.post("/temp-file") {
+            withAuth()
+            contentType(ContentType.Image.JPEG)
+            setBody("temporary-content".toByteArray())
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+        val tempFileId = Regex("\"tempFileId\":\"([^\"]+)\"").find(uploadResponse.bodyAsText())?.groupValues?.get(1)
+        assertNotNull(tempFileId)
+
+        val getResponse = client.get("/temp-file/$tempFileId") {
+            withAuth()
+        }
+
+        assertEquals(HttpStatusCode.OK, getResponse.status)
+        assertEquals("temporary-content", getResponse.bodyAsText())
+        assertEquals("image/jpeg", getResponse.headers[HttpHeaders.ContentType])
+    }
+
+    @Test
+    fun testGetMissingTemporaryFileReturns404() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val response = client.get("/temp-file/7a093fd8-74be-4648-ba8a-c17f57ec799f") {
+            withAuth()
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun testGetTemporaryFileWithoutAuthReturns401() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val response = client.get("/temp-file/7a093fd8-74be-4648-ba8a-c17f57ec799f")
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("\"error\":\"unauthorized\""))
+    }
+
+    @Test
+    fun testGetTemporaryFileDeletedDuringRequestReturns404() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val uploadResponse = client.post("/temp-file") {
+            withAuth()
+            setBody("temporary-content".toByteArray())
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+        val tempFileId = Regex("\"tempFileId\":\"([^\"]+)\"").find(uploadResponse.bodyAsText())?.groupValues?.get(1)
+        assertNotNull(tempFileId)
+
+        // Get the file info so we can delete it manually
+        val tempInfo = temporaryStorage.getTemporaryFileInfo(tempFileId!!)!!
+
+        // Delete the file manually to simulate race condition
+        java.nio.file.Files.deleteIfExists(tempInfo.filePath)
+
+        // Now try to download the file - should return 404
+        val getResponse = client.get("/temp-file/$tempFileId") {
+            withAuth()
+        }
+
+        assertEquals(HttpStatusCode.NotFound, getResponse.status)
+        assertTrue(getResponse.bodyAsText().contains("Temporary file not found"))
+    }
 }
