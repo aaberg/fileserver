@@ -15,7 +15,7 @@ docker run --rm \
   -e FILESERVER_PUBLIC_BASE_URL=https://files.example.com \
   -v fileserver_data:/data/files \
   -p 9000:9000 -p 9001:9001 \
-  ghcr.io/<owner>/<repo>:latest
+  ghcr.io/aaberg/fileserver:latest
 ```
 
 Notes:
@@ -29,7 +29,7 @@ Notes:
 ```yaml
 services:
   fileserver:
-    image: ghcr.io/<owner>/<repo>:latest
+    image: ghcr.io/aaberg/fileserver:latest
     container_name: fileserver
     environment:
       PRIVATE_API_TOKEN: ${PRIVATE_API_TOKEN}
