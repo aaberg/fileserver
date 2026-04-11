@@ -383,4 +383,33 @@ class PrivateRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.bodyAsText().contains("\"error\":\"unauthorized\""))
     }
+
+    @Test
+    fun testGetTemporaryFileDeletedDuringRequestReturns404() = testApplication {
+        application {
+            configurePrivateRoutesForTest()
+        }
+
+        val uploadResponse = client.post("/temp-file") {
+            withAuth()
+            setBody("temporary-content".toByteArray())
+        }
+        assertEquals(HttpStatusCode.OK, uploadResponse.status)
+        val tempFileId = Regex("\"tempFileId\":\"([^\"]+)\"").find(uploadResponse.bodyAsText())?.groupValues?.get(1)
+        assertNotNull(tempFileId)
+
+        // Get the file info so we can delete it manually
+        val tempInfo = temporaryStorage.getTemporaryFileInfo(tempFileId!!)!!
+
+        // Delete the file manually to simulate race condition
+        java.nio.file.Files.deleteIfExists(tempInfo.filePath)
+
+        // Now try to download the file - should return 404
+        val getResponse = client.get("/temp-file/$tempFileId") {
+            withAuth()
+        }
+
+        assertEquals(HttpStatusCode.NotFound, getResponse.status)
+        assertTrue(getResponse.bodyAsText().contains("Temporary file not found"))
+    }
 }

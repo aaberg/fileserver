@@ -2,23 +2,21 @@ package net.aabergs.routes
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.server.plugins.*
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import net.aabergs.respondJsonError
 import net.aabergs.models.PublicUrlRequest
 import net.aabergs.models.PublicUrlResponse
 import net.aabergs.models.TemporaryFileUploadResponse
-import net.aabergs.services.FileStorage
+import net.aabergs.respondJsonError
+import net.aabergs.services.*
 import net.aabergs.services.PayloadTooLargeException
-import net.aabergs.services.StoredFileInfo
-import net.aabergs.services.TemporaryFileStorage
-import net.aabergs.services.UrlGenerator
-import java.io.File
+import java.io.FileNotFoundException
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
@@ -31,14 +29,31 @@ private suspend fun ApplicationCall.respondWithFileDownload(
     notFoundMessage: String
 ) {
     if (storedFile != null) {
+        // Re-check file existence right before streaming to handle race conditions
+        // where cleanup or concurrent operations may have deleted the file
+        if (!Files.isRegularFile(storedFile.filePath)) {
+            respond(HttpStatusCode.NotFound, notFoundMessage)
+            return
+        }
+        
         val file = storedFile.filePath.toFile()
         response.header(
             HttpHeaders.ContentDisposition,
             ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString()
         )
         response.header("X-Content-Type-Options", "nosniff")
-        respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
-            file.inputStream().use { input -> input.copyTo(this) }
+        
+        // Handle file disappearance during open attempt
+        try {
+            respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
+                file.inputStream().use { input -> input.copyTo(this) }
+            }
+        } catch (e: NoSuchFileException) {
+            // File was deleted between existence check and open attempt
+            respond(HttpStatusCode.NotFound, notFoundMessage)
+        } catch (e: FileNotFoundException) {
+            // File was deleted between existence check and open attempt
+            respond(HttpStatusCode.NotFound, notFoundMessage)
         }
     } else {
         respond(HttpStatusCode.NotFound, notFoundMessage)
