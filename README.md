@@ -157,7 +157,7 @@ val client = FileserverClient(
 )
 
 client.uploadFile("example.txt", "hello".toByteArray())
-val publicUrl = client.createPublicUrl("example.txt", durationSeconds = 60)
+val publicUrl = client.createPublicUrl("example.txt", durationMinutes = 60)
 ```
 
 ## Development
