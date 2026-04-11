@@ -73,6 +73,14 @@ Content-Type: application/json
 POST {{privateHost}}//temp-file/{{tempFileId}}/promote/ny-file
 Authorization: Bearer {{token}}
 
+### Generate public url of the promoted file
+POST {{privateHost}}/file/ny-file/public-url
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "duration": 10
+}
 
 ### Cleanup: delete test file
 DELETE {{privateHost}}/file/{{fileId}}
