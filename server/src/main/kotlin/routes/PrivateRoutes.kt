@@ -15,14 +15,35 @@ import net.aabergs.models.PublicUrlResponse
 import net.aabergs.models.TemporaryFileUploadResponse
 import net.aabergs.services.FileStorage
 import net.aabergs.services.PayloadTooLargeException
+import net.aabergs.services.StoredFileInfo
 import net.aabergs.services.TemporaryFileStorage
 import net.aabergs.services.UrlGenerator
+import java.io.File
 import java.security.MessageDigest
 
 private val FILE_ID_PATTERN = Regex("^[A-Za-z0-9._-]{1,128}$")
 const val DEFAULT_MAX_UPLOAD_BYTES: Long = 10L * 1024 * 1024
 private val ROUTE_JSON = Json
 private val DEFAULT_DOWNLOAD_CONTENT_TYPE = ContentType.Application.OctetStream
+
+private suspend fun ApplicationCall.respondWithFileDownload(
+    storedFile: StoredFileInfo?,
+    notFoundMessage: String
+) {
+    if (storedFile != null) {
+        val file = storedFile.filePath.toFile()
+        response.header(
+            HttpHeaders.ContentDisposition,
+            ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString()
+        )
+        response.header("X-Content-Type-Options", "nosniff")
+        respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
+            file.inputStream().use { input -> input.copyTo(this) }
+        }
+    } else {
+        respond(HttpStatusCode.NotFound, notFoundMessage)
+    }
+}
 
 private fun ApplicationRequest.uploadContentTypeHeader(): String {
     val contentType = contentType().withoutParameters()
@@ -98,19 +119,7 @@ fun Route.privateRoutes(
             }
             val id = call.requireValidFileId()
             val storedFile = storage.getStoredFileInfo(id)
-            if (storedFile != null) {
-                val file = storedFile.filePath.toFile()
-                call.response.header(
-                    HttpHeaders.ContentDisposition,
-                    ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, file.name).toString()
-                )
-                call.response.header("X-Content-Type-Options", "nosniff")
-                call.respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
-                    file.inputStream().use { input -> input.copyTo(this) }
-                }
-            } else {
-                call.respond(HttpStatusCode.NotFound, "File not found")
-            }
+            call.respondWithFileDownload(storedFile, "File not found")
         }
         
         delete("/{id}") {
@@ -167,6 +176,15 @@ fun Route.privateRoutes(
             val tempFileId = call.parameters["tempFileId"] ?: throw BadRequestException("Missing tempFileId")
             temporaryStorage.deleteTemporaryFile(tempFileId)
             call.respond(HttpStatusCode.OK)
+        }
+
+        get("/{tempFileId}") {
+            if (!call.requirePrivateApiAuth(privateApiToken)) {
+                return@get
+            }
+            val tempFileId = call.parameters["tempFileId"] ?: throw BadRequestException("Missing tempFileId")
+            val storedFile = temporaryStorage.getTemporaryStoredFileInfoIfValid(tempFileId)
+            call.respondWithFileDownload(storedFile, "Temporary file not found")
         }
 
         post("/{tempFileId}/promote/{id}") {

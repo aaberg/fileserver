@@ -89,6 +89,11 @@ curl -X POST \
   --data-binary "draft-content" \
   http://localhost:9001/temp-file
 
+# Download temporary file directly (private API)
+curl -X GET \
+  -H "Authorization: Bearer dev-token" \
+  http://localhost:9001/temp-file/<tempFileId>
+
 # Create public URL for temp file
 curl -X POST \
   -H "Authorization: Bearer dev-token" \
