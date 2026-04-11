@@ -1,13 +1,18 @@
 package net.aabergs.services
 
+import io.ktor.http.ContentType
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.nio.file.StandardOpenOption
 import java.util.UUID
 
-data class TemporaryFileInfo(val tempFileId: String, val filePath: Path, val expiresAt: Long)
+data class TemporaryFileInfo(
+    val tempFileId: String,
+    val filePath: Path,
+    val expiresAt: Long,
+    val contentType: String
+)
 
 class TemporaryFileStorage(storageDirectory: String) {
     private val tempRoot: Path = Path.of(storageDirectory).toAbsolutePath().normalize().resolve(".tmp")
@@ -16,18 +21,23 @@ class TemporaryFileStorage(storageDirectory: String) {
         Files.createDirectories(tempRoot)
     }
 
-    fun storeTemporaryFromStream(input: InputStream, maxUploadBytes: Long, ttlSeconds: Long): TemporaryFileInfo {
+    fun storeTemporaryFromStream(
+        input: InputStream,
+        maxUploadBytes: Long,
+        ttlSeconds: Long,
+        contentType: String = ContentType.Application.OctetStream.toString()
+    ): TemporaryFileInfo {
         val tempId = UUID.randomUUID().toString()
         val filePath = filePath(tempId)
         val expiresAt = System.currentTimeMillis() + ttlSeconds * 1000
 
         try {
             StreamFileWriter.writeStreamAtomically(tempRoot, filePath, input, maxUploadBytes)
-            writeExpiresAt(tempId, expiresAt)
-            return TemporaryFileInfo(tempId, filePath, expiresAt)
+            FileMetadataStore.write(filePath, FileMetadata(contentType = contentType, expiresAt = expiresAt))
+            return TemporaryFileInfo(tempId, filePath, expiresAt, contentType)
         } catch (e: Exception) {
             Files.deleteIfExists(filePath)
-            Files.deleteIfExists(metaPath(tempId))
+            FileMetadataStore.delete(filePath)
             throw e
         }
     }
@@ -38,8 +48,9 @@ class TemporaryFileStorage(storageDirectory: String) {
         if (!Files.exists(path) || !Files.isRegularFile(path)) {
             return null
         }
-        val expiresAt = readExpiresAt(id) ?: return null
-        return TemporaryFileInfo(id, path, expiresAt)
+        val metadata = FileMetadataStore.read(path) ?: return null
+        val expiresAt = metadata.expiresAt ?: return null
+        return TemporaryFileInfo(id, path, expiresAt, metadata.contentType)
     }
 
     fun getTemporaryFilePathIfValid(tempFileId: String, now: Long = System.currentTimeMillis()): Path? {
@@ -47,14 +58,23 @@ class TemporaryFileStorage(storageDirectory: String) {
         return if (now < info.expiresAt) info.filePath else null
     }
 
-    fun extendExpiry(tempFileId: String, expiresAt: Long) {
-        val info = getTemporaryFileInfo(tempFileId) ?: return
-        if (expiresAt > info.expiresAt) {
-            writeExpiresAt(info.tempFileId, expiresAt)
+    fun getTemporaryStoredFileInfoIfValid(tempFileId: String, now: Long = System.currentTimeMillis()): StoredFileInfo? {
+        val info = getTemporaryFileInfo(tempFileId) ?: return null
+        return if (now < info.expiresAt) {
+            StoredFileInfo(info.filePath, info.contentType)
+        } else {
+            null
         }
     }
 
-    fun promoteTemporaryFile(tempFileId: String, destinationPath: Path) {
+    fun extendExpiry(tempFileId: String, expiresAt: Long) {
+        val info = getTemporaryFileInfo(tempFileId) ?: return
+        if (expiresAt > info.expiresAt) {
+            FileMetadataStore.write(info.filePath, FileMetadata(contentType = info.contentType, expiresAt = expiresAt))
+        }
+    }
+
+    fun promoteTemporaryFile(tempFileId: String, destinationPath: Path): TemporaryFileInfo {
         val info = getTemporaryFileInfo(tempFileId) ?: throw IllegalArgumentException("Temporary file not found")
         if (System.currentTimeMillis() >= info.expiresAt) {
             throw IllegalArgumentException("Temporary file expired")
@@ -67,13 +87,15 @@ class TemporaryFileStorage(storageDirectory: String) {
             Files.deleteIfExists(info.filePath)
         }
 
-        Files.deleteIfExists(metaPath(info.tempFileId))
+        FileMetadataStore.delete(info.filePath)
+        return info
     }
 
     fun deleteTemporaryFile(tempFileId: String) {
         val id = normalizeTempId(tempFileId) ?: return
-        Files.deleteIfExists(filePath(id))
-        Files.deleteIfExists(metaPath(id))
+        val path = filePath(id)
+        Files.deleteIfExists(path)
+        FileMetadataStore.delete(path)
     }
 
     fun cleanupExpiredTemporaryFiles(now: Long = System.currentTimeMillis()) {
@@ -87,15 +109,18 @@ class TemporaryFileStorage(storageDirectory: String) {
         }
 
         val metaIds = entries
-            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta") }
-            .map { it.fileName.toString().removeSuffix(".meta") }
+            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta.json") }
+            .map { it.fileName.toString().removeSuffix(".meta.json") }
             .toSet()
 
         entries
-            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta") }
+            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta.json") }
             .forEach { meta ->
-                val id = meta.fileName.toString().removeSuffix(".meta")
-                val expiresAt = runCatching { Files.readString(meta).trim().toLong() }.getOrNull()
+                val id = meta.fileName.toString().removeSuffix(".meta.json")
+                val expiresAt = runCatching {
+                    FileMetadataStore.read(filePath(id))?.expiresAt
+                        ?: kotlinx.serialization.json.Json.decodeFromString<FileMetadata>(Files.readString(meta)).expiresAt
+                }.getOrNull()
                 if (expiresAt == null || expiresAt <= now || !Files.exists(filePath(id))) {
                     Files.deleteIfExists(filePath(id))
                     Files.deleteIfExists(meta)
@@ -103,7 +128,7 @@ class TemporaryFileStorage(storageDirectory: String) {
             }
 
         entries
-            .filter { Files.isRegularFile(it) && !it.fileName.toString().endsWith(".meta") }
+            .filter { Files.isRegularFile(it) && !it.fileName.toString().endsWith(".meta.json") }
             .forEach { file ->
                 val id = file.fileName.toString()
                 if (!metaIds.contains(id)) {
@@ -112,26 +137,7 @@ class TemporaryFileStorage(storageDirectory: String) {
             }
     }
 
-    private fun writeExpiresAt(tempFileId: String, expiresAt: Long) {
-        Files.writeString(
-            metaPath(tempFileId),
-            expiresAt.toString(),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE
-        )
-    }
-
-    private fun readExpiresAt(tempFileId: String): Long? {
-        val meta = metaPath(tempFileId)
-        if (!Files.exists(meta) || !Files.isRegularFile(meta)) {
-            return null
-        }
-        return runCatching { Files.readString(meta).trim().toLong() }.getOrNull()
-    }
-
     private fun filePath(tempFileId: String): Path = tempRoot.resolve(tempFileId).normalize()
-    private fun metaPath(tempFileId: String): Path = tempRoot.resolve("$tempFileId.meta").normalize()
 
     private fun normalizeTempId(tempFileId: String): String? {
         return runCatching { UUID.fromString(tempFileId).toString() }.getOrNull()

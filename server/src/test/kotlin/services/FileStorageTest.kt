@@ -94,4 +94,14 @@ class FileStorageTest {
         assertNotNull(retrieved)
         assertArrayEquals(bytes, retrieved)
     }
+
+    @Test
+    fun testStorePreservesContentTypeMetadata() {
+        storage.storeFile("image-file", "content".toByteArray(), "image/png")
+
+        val storedFile = storage.getStoredFileInfo("image-file")
+
+        assertNotNull(storedFile)
+        assertEquals("image/png", storedFile?.contentType)
+    }
 }

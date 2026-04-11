@@ -14,6 +14,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val HTTP_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME
+private val DEFAULT_DOWNLOAD_CONTENT_TYPE = ContentType.Application.OctetStream
 
 private fun toHttpDate(epochMillis: Long): String {
     return HTTP_DATE_FORMAT.format(Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC))
@@ -35,13 +36,13 @@ fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage, tempora
         }
 
         val fileRef = urlGenerator.parseReference(urlInfo.fileRef)
-        val filePath = when (fileRef.type) {
-            FileReferenceType.PERMANENT -> storage.getFilePath(fileRef.id)
-            FileReferenceType.TEMPORARY -> temporaryStorage.getTemporaryFilePathIfValid(fileRef.id, now)
+        val storedFile = when (fileRef.type) {
+            FileReferenceType.PERMANENT -> storage.getStoredFileInfo(fileRef.id)
+            FileReferenceType.TEMPORARY -> temporaryStorage.getTemporaryStoredFileInfoIfValid(fileRef.id, now)
         }
 
-        if (filePath != null) {
-            val file = filePath.toFile()
+        if (storedFile != null) {
+            val file = storedFile.filePath.toFile()
             val remainingSeconds = ((urlInfo.expiresAt - now) / 1000).coerceAtLeast(0)
             val etag = "\"${file.length()}-${file.lastModified()}\""
 
@@ -54,7 +55,9 @@ fun Route.publicRoutes(urlGenerator: UrlGenerator, storage: FileStorage, tempora
             call.response.header(HttpHeaders.LastModified, toHttpDate(file.lastModified()))
             call.response.header("X-Content-Type-Options", "nosniff")
 
-            call.respondFile(file)
+            call.respondOutputStream(runCatching { ContentType.parse(storedFile.contentType) }.getOrDefault(DEFAULT_DOWNLOAD_CONTENT_TYPE)) {
+                file.inputStream().use { input -> input.copyTo(this) }
+            }
         } else {
             call.respond(HttpStatusCode.NotFound, "File not found")
         }

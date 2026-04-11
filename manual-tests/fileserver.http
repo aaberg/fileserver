@@ -1,7 +1,7 @@
 @publicHost = http://localhost:9000
 @privateHost = http://localhost:9001
 @token = dev-token
-@fileId = manual-test.txt
+@fileId = manual-test
 
 ### Public health (open)
 GET {{publicHost}}/health
@@ -12,9 +12,9 @@ GET {{privateHost}}/health
 ### Upload file (private auth required)
 PUT {{privateHost}}/file/{{fileId}}
 Authorization: Bearer {{token}}
-Content-Type: application/octet-stream
+Content-Type: image/jpeg
 
-Hello from IntelliJ HTTP client.
+< ./testfile.jpg
 
 ### Download file (private auth required)
 GET {{privateHost}}/file/{{fileId}}
@@ -45,7 +45,34 @@ PUT {{privateHost}}/file/..
 Authorization: Bearer {{token}}
 Content-Type: application/octet-stream
 
-bad
+### upload a temporary file
+POST {{privateHost}}/temp-file
+Authorization: Bearer {{token}}
+Content-Type: image/jpeg
+
+< ./testfile.jpg
+
+> {%
+ client.global.set("tempFileId", response.body.tempFileId);
+%}
+
+### get the uploaded temporary file
+GET {{privateHost}}/temp-file/{{tempFileId}}
+Authorization: Bearer {{token}}
+
+### Get the temp file public url
+POST {{privateHost}}/temp-file/{{tempFileId}}/public-url
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "duration": "5"
+}
+
+### Promote the temp file
+POST {{privateHost}}//temp-file/{{tempFileId}}/promote/ny-file
+Authorization: Bearer {{token}}
+
 
 ### Cleanup: delete test file
 DELETE {{privateHost}}/file/{{fileId}}
