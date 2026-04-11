@@ -117,10 +117,7 @@ class TemporaryFileStorage(storageDirectory: String) {
             .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".meta.json") }
             .forEach { meta ->
                 val id = meta.fileName.toString().removeSuffix(".meta.json")
-                val expiresAt = runCatching {
-                    FileMetadataStore.read(filePath(id))?.expiresAt
-                        ?: kotlinx.serialization.json.Json.decodeFromString<FileMetadata>(Files.readString(meta)).expiresAt
-                }.getOrNull()
+                val expiresAt = FileMetadataStore.read(filePath(id))?.expiresAt
                 if (expiresAt == null || expiresAt <= now || !Files.exists(filePath(id))) {
                     Files.deleteIfExists(filePath(id))
                     Files.deleteIfExists(meta)

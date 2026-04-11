@@ -32,14 +32,20 @@ class FileStorage(private val storageDirectory: String) {
     
     fun storeFile(id: String, content: ByteArray, contentType: String = ContentType.Application.OctetStream.toString()) {
         val filePath = resolveSafePath(id)
-        Files.write(
-            filePath,
-            content,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE
-        )
-        FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        try {
+            Files.write(
+                filePath,
+                content,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE
+            )
+            FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        } catch (e: Exception) {
+            Files.deleteIfExists(filePath)
+            FileMetadataStore.delete(filePath)
+            throw e
+        }
     }
 
     fun storeFileFromStream(
@@ -49,8 +55,14 @@ class FileStorage(private val storageDirectory: String) {
         contentType: String = ContentType.Application.OctetStream.toString()
     ) {
         val filePath = resolveSafePath(id)
-        StreamFileWriter.writeStreamAtomically(storagePath, filePath, input, maxUploadBytes)
-        FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        try {
+            StreamFileWriter.writeStreamAtomically(storagePath, filePath, input, maxUploadBytes)
+            FileMetadataStore.write(filePath, FileMetadata(contentType = contentType))
+        } catch (e: Exception) {
+            Files.deleteIfExists(filePath)
+            FileMetadataStore.delete(filePath)
+            throw e
+        }
     }
     
     fun getFile(id: String): ByteArray? {
