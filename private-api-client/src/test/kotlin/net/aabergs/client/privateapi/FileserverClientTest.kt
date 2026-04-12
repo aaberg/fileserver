@@ -195,4 +195,40 @@ class FileserverClientTest {
         assertContains(request.body.readUtf8(), "\"duration\":5")
         assertEquals("http://localhost:9000/temp123", result)
     }
+
+    @Test
+    fun downloadTemporaryFileReturnsBinaryContent() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "image/png")
+                .setBody("temporary-content")
+        )
+
+        val content = client.downloadTemporaryFile("123e4567-e89b-12d3-a456-426614174000")
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/temp-file/123e4567-e89b-12d3-a456-426614174000", request.path)
+        assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertEquals("temporary-content", String(content, Charsets.UTF_8))
+    }
+
+    @Test
+    fun downloadTemporaryFileMaps404ToNotFoundException() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"error\":\"not_found\",\"message\":\"Temporary file not found\"}")
+        )
+
+        val exception = assertFailsWith<NotFoundException> {
+            client.downloadTemporaryFile("missing-temp-id")
+        }
+
+        assertEquals(404, exception.statusCode)
+        assertEquals("not_found", exception.errorCode)
+        assertEquals("Temporary file not found", exception.message)
+    }
 }
