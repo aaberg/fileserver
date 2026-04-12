@@ -121,6 +121,22 @@ class FileserverClient(
         }
     }
 
+    fun downloadTemporaryFile(tempFileId: String): ByteArray {
+        val request = Request.Builder()
+            .url(url("temp-file", tempFileId))
+            .get()
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                return response.body?.bytes() ?: ByteArray(0)
+            }
+
+            throw mapError(response.code, response.body?.string())
+        }
+    }
+
     fun promoteTemporaryFile(tempFileId: String, fileId: String) {
         val request = Request.Builder()
             .url(url("temp-file", tempFileId, "promote", fileId))
