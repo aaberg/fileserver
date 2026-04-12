@@ -6,7 +6,7 @@
 ## Entry Points
 
 - Server entrypoint is `server/src/main/kotlin/Application.kt` via `startServers()`.
-- One process starts two embedded CIO servers: public API on `9000`, private API on `9001`.
+- One process starts two embedded CIO servers: public API defaults to `9000` and private API defaults to `9001`; configure them with `fileserver.publicPort` and `fileserver.privatePort` in `server/src/main/resources/application.yaml`.
 - Public routes live in `server/src/main/kotlin/routes/PublicRoutes.kt`; private/authenticated routes live in `server/src/main/kotlin/routes/PrivateRoutes.kt`.
 
 ## Run And Verify
