@@ -57,19 +57,7 @@ class FileserverClient(
     }
 
     fun downloadFile(id: String): ByteArray {
-        val request = Request.Builder()
-            .url(url("file", id))
-            .get()
-            .authorized()
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (response.isSuccessful) {
-                return response.body?.bytes() ?: ByteArray(0)
-            }
-
-            throw mapError(response.code, response.body?.string())
-        }
+        return downloadFileInternal("file", id)
     }
 
     fun deleteFile(id: String) {
@@ -122,19 +110,7 @@ class FileserverClient(
     }
 
     fun downloadTemporaryFile(tempFileId: String): ByteArray {
-        val request = Request.Builder()
-            .url(url("temp-file", tempFileId))
-            .get()
-            .authorized()
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (response.isSuccessful) {
-                return response.body?.bytes() ?: ByteArray(0)
-            }
-
-            throw mapError(response.code, response.body?.string())
-        }
+        return downloadFileInternal("temp-file", tempFileId)
     }
 
     fun promoteTemporaryFile(tempFileId: String, fileId: String) {
@@ -151,6 +127,22 @@ class FileserverClient(
 
     fun createPublicUrlForTemporaryFile(tempFileId: String, durationMinutes: Long): String {
         return createPublicUrlInternal(durationMinutes, "temp-file", tempFileId, "public-url")
+    }
+
+    private fun downloadFileInternal(vararg pathSegments: String): ByteArray {
+        val request = Request.Builder()
+            .url(url(*pathSegments))
+            .get()
+            .authorized()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                return response.body?.bytes() ?: ByteArray(0)
+            }
+
+            throw mapError(response.code, response.body?.string())
+        }
     }
 
     private fun createPublicUrlInternal(durationMinutes: Long, vararg pathSegments: String): String {

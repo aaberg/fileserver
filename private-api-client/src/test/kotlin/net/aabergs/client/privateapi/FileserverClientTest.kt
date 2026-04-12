@@ -211,7 +211,7 @@ class FileserverClientTest {
         assertEquals("GET", request.method)
         assertEquals("/temp-file/123e4567-e89b-12d3-a456-426614174000", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
-        assertEquals("temporary-content", String(content))
+        assertEquals("temporary-content", String(content, Charsets.UTF_8))
     }
 
     @Test
