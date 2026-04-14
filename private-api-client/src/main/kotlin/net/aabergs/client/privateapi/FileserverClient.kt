@@ -13,6 +13,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.ConcurrentHashMap
 
 private const val DEFAULT_UPLOAD_CONTENT_TYPE = "application/octet-stream"
 
@@ -25,19 +26,10 @@ class FileserverClient(
     }
 ) {
     companion object {
-        private val mediaTypeCache: MutableMap<String, MediaType> = mutableMapOf()
+        private val mediaTypeCache: ConcurrentHashMap<String, MediaType> = ConcurrentHashMap()
 
         private fun getMediaTypeInternal(contentType: String): MediaType? {
-            if (mediaTypeCache.containsKey(contentType))
-                return mediaTypeCache[contentType]
-
-            return mediaTypeCache[contentType] ?: runCatching {
-                contentType.toMediaTypeOrNull().also { mediaType ->
-                    if (mediaType != null) {
-                        mediaTypeCache[contentType] = mediaType
-                    }
-                }
-            }.getOrNull()
+            return mediaTypeCache.getOrPut(contentType) { contentType.toMediaType() }
         }
     }
 
