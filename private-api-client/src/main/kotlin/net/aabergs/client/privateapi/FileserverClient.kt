@@ -29,7 +29,8 @@ class FileserverClient(
         private val mediaTypeCache: ConcurrentHashMap<String, MediaType> = ConcurrentHashMap()
 
         private fun getMediaTypeInternal(contentType: String): MediaType {
-            return mediaTypeCache.getOrPut(contentType) { contentType.toMediaType() }
+            return mediaTypeCache.getOrPut(contentType) {
+                contentType.toMediaTypeOrNull() ?: throw IllegalArgumentException("Invalid content type: $contentType") }
         }
     }
 
