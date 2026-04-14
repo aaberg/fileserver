@@ -30,7 +30,8 @@ class FileserverClient(
 
         private fun getMediaTypeInternal(contentType: String): MediaType {
             return mediaTypeCache.getOrPut(contentType) {
-                contentType.toMediaTypeOrNull() ?: throw IllegalArgumentException("Invalid content type: $contentType") }
+                contentType.toMediaTypeOrNull() ?: throw IllegalArgumentException("Invalid content type: $contentType")
+            }
         }
     }
 
