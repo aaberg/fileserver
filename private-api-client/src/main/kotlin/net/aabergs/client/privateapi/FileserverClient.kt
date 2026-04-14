@@ -7,10 +7,15 @@ import net.aabergs.client.privateapi.dto.CreatePublicUrlResponse
 import net.aabergs.client.privateapi.dto.TemporaryFileUploadResponse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.ConcurrentHashMap
+
+private const val DEFAULT_UPLOAD_CONTENT_TYPE = "application/octet-stream"
 
 class FileserverClient(
     baseUrl: String,
@@ -20,6 +25,16 @@ class FileserverClient(
         ignoreUnknownKeys = true
     }
 ) {
+    companion object {
+        private val mediaTypeCache: ConcurrentHashMap<String, MediaType> = ConcurrentHashMap()
+
+        private fun getMediaTypeInternal(contentType: String): MediaType {
+            return mediaTypeCache.getOrPut(contentType) {
+                contentType.toMediaTypeOrNull() ?: throw IllegalArgumentException("Invalid content type: $contentType")
+            }
+        }
+    }
+
     private val baseHttpUrl: HttpUrl = baseUrl.toHttpUrl()
 
     fun health(): Boolean {
@@ -45,9 +60,13 @@ class FileserverClient(
     }
 
     fun uploadFile(id: String, content: ByteArray) {
+        uploadFile(id, content, DEFAULT_UPLOAD_CONTENT_TYPE)
+    }
+
+    fun uploadFile(id: String, content: ByteArray, contentType: String) {
         val request = Request.Builder()
             .url(url("file", id))
-            .put(content.toRequestBody("application/octet-stream".toMediaType()))
+            .put(content.toBinaryRequestBody(contentType))
             .authorized()
             .build()
 
@@ -77,9 +96,13 @@ class FileserverClient(
     }
 
     fun uploadTemporaryFile(content: ByteArray): TemporaryFileUploadResponse {
+        return uploadTemporaryFile(content, DEFAULT_UPLOAD_CONTENT_TYPE)
+    }
+
+    fun uploadTemporaryFile(content: ByteArray, contentType: String): TemporaryFileUploadResponse {
         val request = Request.Builder()
             .url(url("temp-file"))
-            .post(content.toRequestBody("application/octet-stream".toMediaType()))
+            .post(content.toBinaryRequestBody(contentType))
             .authorized()
             .build()
 
@@ -170,6 +193,11 @@ class FileserverClient(
     private fun Request.Builder.authorized(): Request.Builder {
         return header("Authorization", "Bearer $bearerToken")
     }
+
+    private fun ByteArray.toBinaryRequestBody(contentType: String) =
+        toRequestBody(
+            getMediaTypeInternal(contentType)
+        )
 
     private fun url(vararg segments: String): HttpUrl {
         val builder = baseHttpUrl.newBuilder()

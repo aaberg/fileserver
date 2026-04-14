@@ -156,7 +156,10 @@ val client = FileserverClient(
     bearerToken = "dev-token"
 )
 
+val imageBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+
 client.uploadFile("example.txt", "hello".toByteArray())
+client.uploadFile("picture.png", imageBytes, contentType = "image/png")
 val publicUrl = client.createPublicUrl("example.txt", durationMinutes = 60)
 ```
 
