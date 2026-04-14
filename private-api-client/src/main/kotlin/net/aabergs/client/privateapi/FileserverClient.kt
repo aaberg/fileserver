@@ -48,7 +48,7 @@ class FileserverClient(
                 return false
             }
 
-            val body = response.body?.string().orEmpty()
+            val body = response.body.string()
             if (body.isBlank()) {
                 return false
             }
@@ -108,10 +108,10 @@ class FileserverClient(
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw mapError(response.code, response.body?.string())
+                throw mapError(response.code, response.body.string())
             }
 
-            val responseBody = response.body?.string().orEmpty()
+            val responseBody = response.body.string()
             if (responseBody.isBlank()) {
                 throw FileserverClientException(response.code, "Missing response body")
             }
@@ -161,10 +161,10 @@ class FileserverClient(
 
         client.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
-                return response.body?.bytes() ?: ByteArray(0)
+                return response.body.bytes()
             }
 
-            throw mapError(response.code, response.body?.string())
+            throw mapError(response.code, response.body.string())
         }
     }
 
@@ -178,10 +178,10 @@ class FileserverClient(
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw mapError(response.code, response.body?.string())
+                throw mapError(response.code, response.body.string())
             }
 
-            val responseBody = response.body?.string().orEmpty()
+            val responseBody = response.body.string()
             if (responseBody.isBlank()) {
                 throw FileserverClientException(response.code, "Missing response body")
             }
@@ -211,7 +211,7 @@ class FileserverClient(
         if (response.isSuccessful) {
             return
         }
-        throw mapError(response.code, response.body?.string())
+        throw mapError(response.code, response.body.string())
     }
 
     private fun mapError(statusCode: Int, rawBody: String?): FileserverClientException {
