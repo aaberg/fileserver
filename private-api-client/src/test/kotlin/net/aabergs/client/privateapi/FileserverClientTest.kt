@@ -69,7 +69,7 @@ class FileserverClientTest {
     }
 
     @Test
-    fun uploadSendsAuthHeaderAndBinaryBody() {
+    fun uploadUsesDefaultContentType() {
         server.enqueue(MockResponse().setResponseCode(200))
         val content = "hello".toByteArray()
 
@@ -81,6 +81,17 @@ class FileserverClientTest {
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
         assertEquals("application/octet-stream", request.getHeader("Content-Type"))
         assertEquals("hello", request.body.readUtf8())
+    }
+
+    @Test
+    fun uploadSupportsCustomContentType() {
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        client.uploadFile("report.txt", "hello".toByteArray(), "text/plain")
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("text/plain", request.getHeader("Content-Type"))
     }
 
     @Test
@@ -163,8 +174,25 @@ class FileserverClientTest {
         assertEquals("POST", request.method)
         assertEquals("/temp-file", request.path)
         assertEquals("Bearer test-token", request.getHeader("Authorization"))
+        assertEquals("application/octet-stream", request.getHeader("Content-Type"))
         assertEquals("123e4567-e89b-12d3-a456-426614174000", result.tempFileId)
         assertEquals(1700000000000, result.expiresAt)
+    }
+
+    @Test
+    fun uploadTemporaryFileSupportsCustomContentType() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"tempFileId\":\"123e4567-e89b-12d3-a456-426614174000\",\"expiresAt\":1700000000000}")
+        )
+
+        client.uploadTemporaryFile("tmp".toByteArray(), "image/png")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("image/png", request.getHeader("Content-Type"))
     }
 
     @Test

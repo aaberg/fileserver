@@ -45,9 +45,13 @@ class FileserverClient(
     }
 
     fun uploadFile(id: String, content: ByteArray) {
+        uploadFile(id, content, "application/octet-stream")
+    }
+
+    fun uploadFile(id: String, content: ByteArray, contentType: String) {
         val request = Request.Builder()
             .url(url("file", id))
-            .put(content.toRequestBody("application/octet-stream".toMediaType()))
+            .put(content.toBinaryRequestBody(contentType))
             .authorized()
             .build()
 
@@ -77,9 +81,13 @@ class FileserverClient(
     }
 
     fun uploadTemporaryFile(content: ByteArray): TemporaryFileUploadResponse {
+        return uploadTemporaryFile(content, "application/octet-stream")
+    }
+
+    fun uploadTemporaryFile(content: ByteArray, contentType: String): TemporaryFileUploadResponse {
         val request = Request.Builder()
             .url(url("temp-file"))
-            .post(content.toRequestBody("application/octet-stream".toMediaType()))
+            .post(content.toBinaryRequestBody(contentType))
             .authorized()
             .build()
 
@@ -170,6 +178,9 @@ class FileserverClient(
     private fun Request.Builder.authorized(): Request.Builder {
         return header("Authorization", "Bearer $bearerToken")
     }
+
+    private fun ByteArray.toBinaryRequestBody(contentType: String) =
+        toRequestBody(contentType.toMediaType())
 
     private fun url(vararg segments: String): HttpUrl {
         val builder = baseHttpUrl.newBuilder()
