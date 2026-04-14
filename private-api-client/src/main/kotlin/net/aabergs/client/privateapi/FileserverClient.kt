@@ -7,6 +7,7 @@ import net.aabergs.client.privateapi.dto.CreatePublicUrlResponse
 import net.aabergs.client.privateapi.dto.TemporaryFileUploadResponse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -23,6 +24,23 @@ class FileserverClient(
         ignoreUnknownKeys = true
     }
 ) {
+    companion object {
+        private val mediaTypeCache: MutableMap<String, MediaType> = mutableMapOf()
+
+        private fun getMediaTypeInternal(contentType: String): MediaType? {
+            if (mediaTypeCache.containsKey(contentType))
+                return mediaTypeCache[contentType]
+
+            return mediaTypeCache[contentType] ?: runCatching {
+                contentType.toMediaTypeOrNull().also { mediaType ->
+                    if (mediaType != null) {
+                        mediaTypeCache[contentType] = mediaType
+                    }
+                }
+            }.getOrNull()
+        }
+    }
+
     private val baseHttpUrl: HttpUrl = baseUrl.toHttpUrl()
 
     fun health(): Boolean {
@@ -184,10 +202,12 @@ class FileserverClient(
 
     private fun ByteArray.toBinaryRequestBody(contentType: String) =
         toRequestBody(
-            requireNotNull(contentType.toMediaTypeOrNull()) {
+            requireNotNull(getMediaTypeInternal(contentType)) {
                 "Invalid contentType: '$contentType'"
             }
         )
+
+
 
     private fun url(vararg segments: String): HttpUrl {
         val builder = baseHttpUrl.newBuilder()
