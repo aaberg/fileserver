@@ -100,7 +100,7 @@ class FileserverClientTest {
             client.uploadFile("report.txt", "hello".toByteArray(), "   ")
         }
 
-        assertEquals("Invalid contentType: '   '", exception.message)
+        assertEquals("No subtype found for: \"   \"", exception.message)
     }
 
     @Test
@@ -210,7 +210,7 @@ class FileserverClientTest {
             client.uploadTemporaryFile("tmp".toByteArray(), "not a media type")
         }
 
-        assertEquals("Invalid contentType: 'not a media type'", exception.message)
+        assertEquals("No subtype found for: \"not a media type\"", exception.message)
     }
 
     @Test

@@ -28,7 +28,7 @@ class FileserverClient(
     companion object {
         private val mediaTypeCache: ConcurrentHashMap<String, MediaType> = ConcurrentHashMap()
 
-        private fun getMediaTypeInternal(contentType: String): MediaType? {
+        private fun getMediaTypeInternal(contentType: String): MediaType {
             return mediaTypeCache.getOrPut(contentType) { contentType.toMediaType() }
         }
     }
@@ -194,12 +194,8 @@ class FileserverClient(
 
     private fun ByteArray.toBinaryRequestBody(contentType: String) =
         toRequestBody(
-            requireNotNull(getMediaTypeInternal(contentType)) {
-                "Invalid contentType: '$contentType'"
-            }
+            getMediaTypeInternal(contentType)
         )
-
-
 
     private fun url(vararg segments: String): HttpUrl {
         val builder = baseHttpUrl.newBuilder()
