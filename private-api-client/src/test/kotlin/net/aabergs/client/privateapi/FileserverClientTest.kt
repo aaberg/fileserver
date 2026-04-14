@@ -95,6 +95,15 @@ class FileserverClientTest {
     }
 
     @Test
+    fun uploadRejectsInvalidCustomContentType() {
+        val exception = assertFailsWith<IllegalArgumentException> {
+            client.uploadFile("report.txt", "hello".toByteArray(), "   ")
+        }
+
+        assertEquals("Invalid contentType: '   '", exception.message)
+    }
+
+    @Test
     fun createPublicUrlParsesResponse() {
         server.enqueue(
             MockResponse()
@@ -193,6 +202,15 @@ class FileserverClientTest {
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("image/png", request.getHeader("Content-Type"))
+    }
+
+    @Test
+    fun uploadTemporaryFileRejectsInvalidCustomContentType() {
+        val exception = assertFailsWith<IllegalArgumentException> {
+            client.uploadTemporaryFile("tmp".toByteArray(), "not a media type")
+        }
+
+        assertEquals("Invalid contentType: 'not a media type'", exception.message)
     }
 
     @Test

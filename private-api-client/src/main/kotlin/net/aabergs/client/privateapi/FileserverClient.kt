@@ -8,9 +8,12 @@ import net.aabergs.client.privateapi.dto.TemporaryFileUploadResponse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+
+private const val DEFAULT_UPLOAD_CONTENT_TYPE = "application/octet-stream"
 
 class FileserverClient(
     baseUrl: String,
@@ -45,7 +48,7 @@ class FileserverClient(
     }
 
     fun uploadFile(id: String, content: ByteArray) {
-        uploadFile(id, content, "application/octet-stream")
+        uploadFile(id, content, DEFAULT_UPLOAD_CONTENT_TYPE)
     }
 
     fun uploadFile(id: String, content: ByteArray, contentType: String) {
@@ -81,7 +84,7 @@ class FileserverClient(
     }
 
     fun uploadTemporaryFile(content: ByteArray): TemporaryFileUploadResponse {
-        return uploadTemporaryFile(content, "application/octet-stream")
+        return uploadTemporaryFile(content, DEFAULT_UPLOAD_CONTENT_TYPE)
     }
 
     fun uploadTemporaryFile(content: ByteArray, contentType: String): TemporaryFileUploadResponse {
@@ -180,7 +183,11 @@ class FileserverClient(
     }
 
     private fun ByteArray.toBinaryRequestBody(contentType: String) =
-        toRequestBody(contentType.toMediaType())
+        toRequestBody(
+            requireNotNull(contentType.toMediaTypeOrNull()) {
+                "Invalid contentType: '$contentType'"
+            }
+        )
 
     private fun url(vararg segments: String): HttpUrl {
         val builder = baseHttpUrl.newBuilder()
