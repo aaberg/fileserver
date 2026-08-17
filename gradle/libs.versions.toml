@@ -1,11 +1,11 @@
 [versions]
-kotlin = "2.3.20"
-ktor = "3.4.2"
-logback = "1.5.32"
-hikari = "7.0.2"
-sqlite-jdbc = "3.51.3.0"
-postgresql = "42.7.10"
-okhttp = "5.3.2"
+kotlin = "2.4.10"
+ktor = "3.5.2"
+logback = "1.6.3"
+hikari = "7.1.0"
+sqlite-jdbc = "3.53.2.1"
+postgresql = "42.7.13"
+okhttp = "5.4.0"
 kotlinx-serialization-json = "1.11.0"
 
 [libraries]
